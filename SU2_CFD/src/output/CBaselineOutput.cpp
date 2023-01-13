@@ -115,3 +115,27 @@ void CBaselineOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolv
   }
 
 }
+
+void CBaselineOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    unsigned short iField = 0;
+    unsigned long iPoint{0};
+
+    if ( fields.size() != solver[0]->GetnVar()){
+      SU2_MPI::Error("Number of requested fields and number of variables do not match.", CURRENT_FUNCTION);
+    }
+
+    CVariable* Node_Sol  = solver[0]->GetNodes();
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      /*--- Take the solver at index 0 --- */
+
+      for (iField = 0; iField < fields.size(); iField++){
+        SetProbeOutputValue(fields[iField], index, Node_Sol->GetSolution(iPoint, iField));
+      }
+    }
+  }
+}

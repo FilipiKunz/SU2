@@ -537,6 +537,13 @@ void CConfig::addPeriodicOption(const string & name, unsigned short & nMarker_Pe
   option_map.insert(pair<string, COptionBase *>(name, val));
 }
 
+void CConfig::addProbeOption(const string & name, unsigned short & nProbe, su2double** & Location) {
+  assert(option_map.find(name) == option_map.end());
+  all_options.insert(pair<string, bool>(name, true));
+  COptionBase* val = new COptionProbe(name, nProbe, Location);
+  option_map.insert(pair<string, COptionBase *>(name, val));
+}
+
 void CConfig::addTurboPerfOption(const string & name, unsigned short & nMarker_TurboPerf,
                                  string* & Marker_TurboBoundIn, string* & Marker_TurboBoundOut) {
   assert(option_map.find(name) == option_map.end());
@@ -992,6 +999,10 @@ void CConfig::SetPointersNull(void) {
 
   Periodic_Translation= nullptr;    Periodic_RotAngles  = nullptr;    Periodic_RotCenter  = nullptr;
 
+  /*--- Probe pointers. ---*/
+  
+  Probe_Location= nullptr;
+
   /* Harmonic Balance Frequency pointer */
 
   Omega_HB = nullptr;
@@ -1032,6 +1043,7 @@ void CConfig::SetPointersNull(void) {
 
   ScreenOutput = nullptr;
   HistoryOutput = nullptr;
+  ProbeOutput = nullptr;
   VolumeOutput = nullptr;
   VolumeOutputFiles = nullptr;
   VolumeOutputFrequencies = nullptr;
@@ -1048,6 +1060,8 @@ void CConfig::SetPointersNull(void) {
   AoS_Offset = 0;
 
   nMarker_PerBound = 0;
+
+  nProbe = 0;
 
   Aeroelastic_Simulation = false;
 
@@ -2090,6 +2104,8 @@ void CConfig::SetConfig_Options() {
   addStringOption("RESTART_ADJ_FILENAME", Restart_AdjFileName, string("restart_adj.dat"));
   /*!\brief VOLUME_FLOW_FILENAME  \n DESCRIPTION: Output file flow (w/o extension) variables \ingroup Config */
   addStringOption("VOLUME_FILENAME", Volume_FileName, string("vol_solution"));
+  /*!\brief CONV_FILENAME \n DESCRIPTION: Output file convergence history (w/o extension) \n DEFAULT: history \ingroup Config*/
+  addStringOption("PROBE_FOLDERNAME", Probe_FolderName, string(""));
   /*!\brief VOLUME_ADJ_FILENAME
    *  \n DESCRIPTION: Output file adjoint (w/o extension) variables  \ingroup Config*/
   addStringOption("VOLUME_ADJ_FILENAME", Adj_FileName, string("adj_vol_solution"));
@@ -2841,6 +2857,8 @@ void CConfig::SetConfig_Options() {
   addStringListOption("HISTORY_OUTPUT", nHistoryOutput, HistoryOutput);
   /* DESCRIPTION: Type of output printed to the volume solution file */
   addStringListOption("VOLUME_OUTPUT", nVolumeOutput, VolumeOutput);
+  /* DESCRIPTION: Type of output printed to the Probe file */
+  addStringListOption("PROBE_OUTPUT", nProbeOutput, ProbeOutput);
 
   /* DESCRIPTION: History writing frequency (INNER_ITER) */
   addUnsignedLongOption("HISTORY_WRT_FREQ_INNER", HistoryWrtFreq[2], 1);
@@ -2902,6 +2920,9 @@ void CConfig::SetConfig_Options() {
 
   /*!\brief ROM_SAVE_FREQ \n DESCRIPTION: How often to save snapshots for unsteady problems.*/
   addUnsignedShortOption("ROM_SAVE_FREQ", rom_save_freq, 1);
+
+  /*!\brief PROBE_LOC \n DESCRIPTION: Locations to record specific node-located history. */
+  addProbeOption("PROBE_LOCATION", nProbe, Probe_Location);
 
   /* END_CONFIG_OPTIONS */
 

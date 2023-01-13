@@ -114,6 +114,94 @@ CADTPointsOnlyClass::CADTPointsOnlyClass(unsigned short nDim,
   for (auto& vec : FrontLeavesNew) vec.reserve(200);
 }
 
+void CADTPointsOnlyClass::BuildCADT(unsigned short nDim,
+                                         unsigned long  nPoints,
+                                         const su2double *coor,
+                                         const unsigned long *pointID,
+                                         const bool     globalTree) {
+
+
+  /*--- Make a distinction between parallel and sequential mode. ---*/
+
+#ifdef HAVE_MPI
+
+  /* Parallel mode. Check whether a global or a local tree must be built. */
+  if( globalTree ) {
+
+    /*--- A global tree must be built. All points are gathered on all ranks.
+          First determine the number of points per rank and store them in such
+          a way that the info can be used directly in Allgatherv. ---*/
+    int rank, size;
+    SU2_MPI::Comm_rank(SU2_MPI::GetComm(), &rank);
+    SU2_MPI::Comm_size(SU2_MPI::GetComm(), &size);
+
+    vector<int> recvCounts(size), displs(size);
+    int sizeLocal = (int) nPoints;
+
+    SU2_MPI::Allgather(&sizeLocal, 1, MPI_INT, recvCounts.data(), 1,
+                       MPI_INT, SU2_MPI::GetComm());
+    displs[0] = 0;
+    for(int i=1; i<size; ++i) displs[i] = displs[i-1] + recvCounts[i-1];
+
+    int sizeGlobal = displs.back() + recvCounts.back();
+
+    /*--- Gather the local pointID's and the ranks of the nodes on all ranks. ---*/
+    localPointIDs.resize(sizeGlobal);
+    SU2_MPI::Allgatherv(pointID, sizeLocal, MPI_UNSIGNED_LONG, localPointIDs.data(),
+                        recvCounts.data(), displs.data(), MPI_UNSIGNED_LONG,
+                        SU2_MPI::GetComm());
+
+    ranksOfPoints.resize(sizeGlobal);
+    vector<int> rankLocal(sizeLocal, rank);
+    SU2_MPI::Allgatherv(rankLocal.data(), sizeLocal, MPI_INT, ranksOfPoints.data(),
+                        recvCounts.data(), displs.data(), MPI_INT, SU2_MPI::GetComm());
+
+    /*--- Gather the coordinates of the points on all ranks. ---*/
+    for(int i=0; i<size; ++i) {recvCounts[i] *= nDim; displs[i] *= nDim;}
+
+    coorPoints.resize(nDim*sizeGlobal);
+    SU2_MPI::Allgatherv(coor, nDim*sizeLocal, MPI_DOUBLE, coorPoints.data(),
+                        recvCounts.data(), displs.data(), MPI_DOUBLE, SU2_MPI::GetComm());
+  }
+  else {
+
+    /*--- A local tree must be built. Copy the coordinates and point IDs and
+          set the ranks to the rank of this processor. ---*/
+    int rank;
+    SU2_MPI::Comm_rank(SU2_MPI::GetComm(), &rank);
+
+    coorPoints.assign(coor, coor + nDim*nPoints);
+    localPointIDs.assign(pointID, pointID + nPoints);
+    ranksOfPoints.assign(nPoints, rank);
+  }
+
+#else
+
+  /*--- Sequential mode. Copy the coordinates and point IDs and
+        set the ranks to MASTER_NODE. ---*/
+  coorPoints.assign(coor, coor + nDim*nPoints);
+  localPointIDs.assign(pointID, pointID + nPoints);
+  ranksOfPoints.assign(nPoints, MASTER_NODE);
+
+#endif
+
+  /*--- Build the tree. ---*/
+  BuildADT(nDim, localPointIDs.size(), coorPoints.data());
+
+  /*--- Reserve the memory for frontLeaves and frontLeavesNew,
+        which are needed during the tree search. ---*/
+  for (auto& vec : FrontLeaves) vec.reserve(200);
+  for (auto& vec : FrontLeavesNew) vec.reserve(200);
+}
+
+CADTPointsOnlyClass::CADTPointsOnlyClass(){
+  /* Allocate some thread-safe working variables if required. */
+  #ifdef HAVE_OMP
+    FrontLeaves.resize(omp_get_max_threads());
+    FrontLeavesNew.resize(omp_get_max_threads());
+  #endif
+}
+
 void CADTPointsOnlyClass::DetermineNearestNode_impl(vector<unsigned long>& frontLeaves,
                                                     vector<unsigned long>& frontLeavesNew,
                                                     const su2double *coor,

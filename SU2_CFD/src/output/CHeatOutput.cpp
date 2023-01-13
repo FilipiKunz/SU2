@@ -129,6 +129,21 @@ void CHeatOutput::SetVolumeOutputFields(CConfig *config){
   AddCommonFVMOutputs(config);
 }
 
+void CHeatOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+
+  // Grid coordinates
+  AddProbeCoordinates(nProbe);
+
+  // SOLUTION
+  AddProbeOutput(nProbe, "TEMPERATURE", "Temperature", "SOLUTION", "Temperature");
+
+  // Primitives
+  AddProbeOutput(nProbe, "HEAT_FLUX", "Heat_Flux", "PRIMITIVE", "Heatflux");
+
+  // Residuals
+  AddProbeOutput(nProbe, "RES_TEMPERATURE", "Residual_Temperature", "RESIDUAL", "Residual of the temperature");
+
+}
 
 void CHeatOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
@@ -147,6 +162,29 @@ void CHeatOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver *
   LoadCommonFVMOutputs(config, geometry, iPoint);
 }
 
+void CHeatOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+
+    CVariable* Node_Heat = solver[HEAT_SOL]->GetNodes();
+    const auto Node_Geo  = geometry->nodes;
+    unsigned long iPoint {0};
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      // Grid coordinates
+      LoadProbeCoordinates(Node_Geo->GetCoord(iPoint), index);
+
+      // SOLUTION
+      SetProbeOutputValue("TEMPERATURE", index, Node_Heat->GetSolution(iPoint, 0));
+
+      // Residuals
+      SetProbeOutputValue("RES_TEMPERATURE", index, solver[HEAT_SOL]->LinSysRes(iPoint, 0));
+    }
+  }
+}
+
 void CHeatOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint, unsigned short iMarker, unsigned long iVertex){
 
   if (!config->GetViscous_Wall(iMarker)) return;
@@ -156,3 +194,11 @@ void CHeatOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver 
 
 }
 
+void CHeatOutput::LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned int iProbe, unsigned short iMarker, unsigned long iVertex){
+
+  if (!config->GetViscous_Wall(iMarker)) return;
+
+  /* Heat flux value at each surface grid node. */
+  SetProbeOutputValue("HEAT_FLUX", iProbe, solver[HEAT_SOL]->GetHeatFlux(iMarker, iVertex));
+
+}

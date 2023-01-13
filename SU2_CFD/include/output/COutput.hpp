@@ -285,6 +285,57 @@ protected:
   /*! \brief Number of requested volume field names in the config file. */
   unsigned short nRequestedVolumeFields;
 
+  /*----------------------------- Probe output ----------------------------*/
+  
+  /*! \brief Number of probes. */
+  unsigned int nProbe;
+  /*! \brief Flag do determine whether or not use the Probes on Setting the values*/
+  bool bProbe{false};
+  /*! \brief Number of fields in the probe output. */
+  unsigned short nProbeFields;
+  /*! \brief Vector containing the probe field names. */
+  vector<string> probeFieldNames;
+  /*! \brief Output file stream for the probe history */
+  std::vector<ofstream> probeFile; 
+  /*! \brief Requested probe field names in the config file. */
+  std::vector<string> requestedProbeFields;
+  /*! \brief Number of requested probe field names in the config file. */
+  unsigned short nRequestedProbeFields;
+  /*! \brief Caches to avoid hashing the output maps to retrieve field values. */
+  std::vector<std::vector<const su2double*>> requestedProbeFieldCache;
+  //! \brief Table structure for writing to history file. */
+  std::vector<PrintingToolbox::CTablePrinter*> probeFileTable;
+  //! \brief Probe output filename. */
+  string probeFilename;
+
+  /** \brief Structure to store information for a probe output field.
+   *
+   *  The stored information is used to create the probe solution file.
+   */
+  struct ProbeOutputField {
+    /*! \brief The name of the field, i.e. the name that is printed in the file header.*/
+    string fieldName;
+    /*! \brief This value identifies the position of the values of this field at each node in the ::Local_Data array. */
+    short  offset;
+    /*! \brief The value of the field. */
+    su2double value = 0.0;
+    /*! \brief The group this field belongs to. */
+    string outputGroup;
+    /*! \brief String containing the description of the field */
+    string description;
+    /*! \brief Default constructor. */
+    ProbeOutputField () {}
+    /*! \brief Constructor to initialize all members. */
+    ProbeOutputField(string fieldName_, int offset_, string volumeOutputGroup_, string description_):
+      fieldName(std::move(fieldName_)),  value(0.0), offset(std::move(offset_)),
+      outputGroup(std::move(volumeOutputGroup_)), description(std::move(description_)){}
+  };
+
+  /*! \brief Associative map to access data stored in the probe output fields by a string identifier. */
+  std::vector<std::map<string, ProbeOutputField>>     probeOutput_Map;
+  /*! \brief Vector that contains the keys of the ::probeOutput_Map in the order of their insertion. */
+  std::vector<string>                                 probeOutput_List;
+
   /*----------------------------- Convergence monitoring ----------------------------*/
 
   su2double cauchyValue,         /*!< \brief Summed value of the convergence indicator. */
@@ -331,6 +382,13 @@ public:
    * \param[in] config - Definition of the particular problem.
    */
   void PreprocessVolumeOutput(CConfig *config);
+
+  /*!
+   * \brief Preprocess the probe output by setting the requested probe output fields.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] wrt - If <TRUE> prepares probe file(s) for writing.
+   */
+  void PreprocessProbeOutput(CConfig *config, CGeometry *geometry, bool wrt = true);
 
   /*!
    * \brief Load the data from the solvers into the data sorters and sort it for the linear partitioning.
@@ -445,6 +503,15 @@ public:
    */
   su2double GetHistoryFieldValue(const string& field) const {
     return historyOutput_Map.at(field).value;
+  }
+
+  /*!
+   * \brief Get the value of particular history output field
+   * \param[in] field - Name of the field
+   * \return Value of the field
+   */
+  su2double GetProbeFieldValue(unsigned int index, const string& field) const {
+    return (probeOutput_Map.at(index)).at(field).value;
   }
 
  /*!
@@ -606,6 +673,17 @@ protected:
   void SetScreen_Output(const CConfig *config);
 
   /*!
+   * \brief Set the probe file header
+   * \param[in] config - Definition of the particular problem.
+   */
+  void SetProbeFile_Header(const CConfig *config, PrintingToolbox::CTablePrinter* probeFileTable, ofstream &probeFile); 
+  /*!
+   * \brief Write the probe file output
+   * \param[in] config - Definition of the particular problem.
+   */
+  void SetProbeFile_Output(const CConfig *config, CGeometry *geometry); 
+
+  /*!
    * \brief Add a new field to the history output.
    * \param[in] name - Name for referencing it (in the config file and in the code).
    * \param[in] field_name - Header that is printed on screen and in the history file.
@@ -715,6 +793,22 @@ protected:
     volumeOutput_List.push_back(name);
   }
 
+  /*!
+   * \brief Add a new field to the probe output.
+   * \param[in] nProbe - Number of probes
+   * \param[in] name - Name for referencing it (in the config file and in the code).
+   * \param[in] field_name - Header that is printed in the output files.
+   * \param[in] groupname - The name of the group this field belongs to.
+   * \param[in] description - Description of the volume field.
+   */
+  inline void AddProbeOutput(unsigned int nProbe, string name, string field_name, string groupname, string description){
+    if(rank==MASTER_NODE && nProbe==0)
+      nProbe = 1;
+    probeOutput_Map.resize(nProbe);
+    for(unsigned int iProbe = 0; iProbe < nProbe; iProbe++){
+      probeOutput_Map[iProbe][name] = ProbeOutputField(field_name, -1, groupname, description);}
+    probeOutput_List.push_back(name);
+  }
 
   /*!
    * \brief Set the value of a volume output field
@@ -737,6 +831,14 @@ protected:
    * \param[in] iPoint - The point location in the field.
    * \param[in] value - The new value of this field.
    */
+  void SetProbeOutputValue(string name, unsigned int iPoint, su2double value);
+
+  /*!
+   * \brief Set the value of a volume output field
+   * \param[in] name - Name of the field.
+   * \param[in] iPoint - The point location in the field.
+   * \param[in] value - The new value of this field.
+   */
   void SetAvgVolumeOutputValue(string name, unsigned long iPoint, su2double value);
 
   /*!
@@ -749,6 +851,12 @@ protected:
    * \param[in] config - Definition of the particular problem.
    */
   void PrepareHistoryFile(CConfig *config);
+
+  /*!
+   * \brief Open the probe file and write the header.
+   * \param[in] config - Definition of the particular problem.
+   */
+  void PrepareProbeFile(CConfig *config, CGeometry *geometry);
 
   /*!
    * \brief Load up the values of the requested volume fields into ::Local_Data array.
@@ -790,9 +898,21 @@ protected:
   void OutputScreenAndHistory(CConfig *config);
 
   /*!
+   * \brief Write screen and history output.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Local geometry
+   */
+  void OutputScreenAndHistory(CConfig *config, CGeometry *geometry);
+
+  /*!
    * \brief Set the history fields common for all solvers.
    */
   void SetCommonHistoryFields();
+
+ /*!
+   * \brief Set the history fields common for all solvers.
+   */
+  void SetCommonProbeFields(const CConfig *config, unsigned int nProbe);
 
   /*!
    * \brief Parses user-defined outputs.
@@ -804,6 +924,12 @@ protected:
    * \param[in] config - Definition of the particular problem.
    */
   void LoadCommonHistoryData(const CConfig *config);
+
+  /*!
+   * \brief Load values of the probe fields common for all solvers.
+   * \param[in] config - Definition of the particular problem.
+   */
+  void LoadCommonProbeData(const CConfig *config, CGeometry *geometry);
 
   /*!
    * \brief Allocates the data sorters if necessary.
@@ -868,6 +994,15 @@ protected:
   inline virtual void LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){}
 
   /*!
+   * \brief Set the values of the probe output fields for a point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] Probe_pointID - Vector of probe's IDs.
+   */
+  inline virtual void LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){}
+
+  /*!
    * \brief Set the values of the volume output fields for a point.
    * \param[in] config - Definition of the particular problem.
    * \param[in] geometry - Geometrical definition of the problem.
@@ -878,6 +1013,18 @@ protected:
    */
   inline virtual void LoadVolumeDataFEM(CConfig *config, CGeometry *geometry, CSolver **solver,
                                         unsigned long iElem, unsigned long index, unsigned short dof){}
+
+  /*!
+   * \brief Set the values of the volume output fields for a point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] iElem - Index of the element.
+   * \param[in] Probe_pointID - Vector of probe's IDs.
+   * \param[in] dof - Index of the local degree of freedom.
+   */
+  inline virtual void LoadProbeDataFEM(CConfig *config, CGeometry *geometry, CSolver **solver,
+                                        unsigned long iElem, unsigned short dof){}
 
   /*!
    * \brief Check whether the base values for relative residuals should be initialized
@@ -899,11 +1046,28 @@ protected:
                                       unsigned long iPoint, unsigned short iMarker, unsigned long iVertex){}
 
   /*!
+   * \brief Set the values of the probe output fields for a surface point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] iProbe - Index of the probe.
+   * \param[in] iMarker - Index of the surface marker.
+   * \param[in] iVertex - Index of the vertex on the marker.
+   */
+  inline virtual void LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver,
+                                      unsigned int iProbe, unsigned short iMarker, unsigned long iVertex){}
+
+  /*!
    * \brief Set the available volume output fields
    * \param[in] config - Definition of the particular problem.
    */
   inline virtual void SetVolumeOutputFields(CConfig *config){}
 
+  /*!
+   * \brief Set the available probe output fields
+   * \param[in] config - Definition of the particular problem.
+   */
+  inline virtual void SetProbeOutputFields(CConfig *config, unsigned int nProbe){}
 
   /*!
    * \brief Load the history output field values

@@ -172,6 +172,34 @@ void CAdjElasticityOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, 
     SetVolumeOutputValue("SENSITIVITY-Z", iPoint, Node_Struc->GetSensitivity(iPoint, 2));
 }
 
+void CAdjElasticityOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    CVariable* Node_Struc = solver[ADJFEA_SOL]->GetNodes();
+    CPoint*    Node_Geo  = geometry->nodes;
+    unsigned long iPoint{0};
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      SetProbeOutputValue("COORD-X", index,  Node_Geo->GetCoord(iPoint, 0));
+      SetProbeOutputValue("COORD-Y", index,  Node_Geo->GetCoord(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("COORD-Z", index, Node_Geo->GetCoord(iPoint, 2));
+
+      SetProbeOutputValue("ADJOINT-X", index, Node_Struc->GetSolution(iPoint, 0));
+      SetProbeOutputValue("ADJOINT-Y", index, Node_Struc->GetSolution(iPoint, 1));
+      if (nVar_FEM == 3)
+        SetProbeOutputValue("ADJOINT-Z", index, Node_Struc->GetSolution(iPoint, 2));
+
+      SetProbeOutputValue("SENSITIVITY-X", index, Node_Struc->GetSensitivity(iPoint, 0));
+      SetProbeOutputValue("SENSITIVITY-Y", index, Node_Struc->GetSensitivity(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("SENSITIVITY-Z", index, Node_Struc->GetSensitivity(iPoint, 2));
+    }
+  }
+}
+
 void CAdjElasticityOutput::SetVolumeOutputFields(CConfig *config){
 
   // Grid coordinates

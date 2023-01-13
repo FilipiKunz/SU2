@@ -53,6 +53,18 @@ protected:
                        unsigned long iPoint, unsigned short iMarker, unsigned long iVertex) override;
 
   /*!
+   * \brief Set the values of the probe output fields for a surface point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] iProbe - Index of the probe.
+   * \param[in] iMarker - Index of the surface marker.
+   * \param[in] iVertex - Index of the vertex on the marker.
+   */
+  void LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver,
+                          unsigned int iProbe, unsigned short iMarker, unsigned long iVertex) override;
+
+  /*!
    * \brief Add flow surface output fields
    * \param[in] config - Definition of the particular problem.
    */
@@ -135,6 +147,15 @@ protected:
    */
   void LoadVolumeData_Scalar(const CConfig* config, const CSolver* const* solver, const CGeometry* geometry,
                              const unsigned long iPoint);
+
+  /*!
+   * \brief Set the values of the probe output fields for a point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] Probe_pointID - Vector of probe's IDs.
+   */
+  void LoadProbeData_Scalar(const CConfig* config, const CSolver* const* solver, CGeometry* geometry);
 
   /*!
    * \brief Add aerodynamic coefficients as output fields

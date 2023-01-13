@@ -51,6 +51,11 @@ class COutput;
  */
 class CDriver {
 protected:
+  /* Set probe variables */
+  vector<unsigned long> Probe_pointID; 
+  vector<int> Probe_rankID; 
+  vector<su2double> Probe_dist;
+  /* Remaining variables*/
   int rank,   /*!< \brief MPI Rank. */
   size;         /*!< \brief MPI Size. */
   char* config_file_name;                       /*!< \brief Configuration file name of the problem.*/
@@ -99,6 +104,8 @@ protected:
   interpolator_container;                       /*!< \brief Definition of the interpolation method between non-matching discretizations of the interface. */
   CInterface ***interface_container;            /*!< \brief Definition of the interface of information and physics. */
   bool dry_run;                                 /*!< \brief Flag if SU2_CFD was started as dry-run via "SU2_CFD -d <config>.cfg" */
+  ofstream probeInfo;                           /*!< \brief Probe offstream variable. */
+  string probe_filename;                        /*!< \brief Probe information filename. */
 
 public:
 
@@ -264,6 +271,11 @@ protected:
    */
   void Output_Preprocessing(CConfig **config, CConfig *driver_config, COutput **&output_container, COutput *&driver_output);
 
+    /*!
+   * \brief Probe preprocess the output container.
+   */
+  void Probe_Preprocessing(CConfig *config, COutput **&output_container, CGeometry *geometry);
+
   /*!
    * \brief Initiate value for static mesh movement such as the gridVel for the ROTATING frame.
    */
@@ -391,6 +403,11 @@ public:
    * \brief Process the boundary conditions and update the multigrid structure.
    */
   void BoundaryConditionsUpdate();
+
+  /*!
+   * \brief Write each probe's location, rank, ID, min dist from the nearest node and pointID of the nearest node.
+   */
+  void writeProbeInfo(CGeometry * geometry);
 
   /*!
    * \brief Get the total drag.

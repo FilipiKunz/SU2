@@ -67,6 +67,12 @@ public:
   void SetVolumeOutputFields(CConfig *config) override;
 
   /*!
+   * \brief Set the available probe output fields
+   * \param[in] config - Definition of the particular problem.
+   */
+  void SetProbeOutputFields(CConfig *config, unsigned int nProbe) override;
+
+  /*!
    * \brief Set the values of the volume output fields for a point.
    * \param[in] config - Definition of the particular problem.
    * \param[in] geometry - Geometrical definition of the problem.
@@ -75,6 +81,15 @@ public:
    */
   void LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint) override;
 
+  /*!
+   * \brief Set the values of the probe output fields for a point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] Probe_pointID - Vector of probe's IDs.
+   */
+  void LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver) override;
+  
   /*!
    * \brief Set the values of the volume output fields for a surface point.
    * \param[in] config - Definition of the particular problem.
@@ -86,4 +101,16 @@ public:
    */
   void LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver,
                        unsigned long iPoint, unsigned short iMarker, unsigned long iVertex) override;
+
+  /*!
+   * \brief Set the values of the probe output fields for a surface point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver  - The container holding all solution data.
+   * \param[in] iProbe - Index of the probe.
+   * \param[in] iMarker - Index of the surface marker.
+   * \param[in] iVertex - Index of the vertex on the marker.
+   */
+  void LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver,
+                       unsigned int iProbe, unsigned short iMarker, unsigned long iVertex) override;
 };

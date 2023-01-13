@@ -1240,6 +1240,116 @@ void CFlowOutput::LoadVolumeData_Scalar(const CConfig* config, const CSolver* co
   }
 }
 
+void CFlowOutput::LoadProbeData_Scalar(const CConfig* config, const CSolver* const* solver, CGeometry* geometry) {
+
+  auto probe_list = geometry->GetProbe_list();
+  
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    const auto* turb_solver = solver[TURB_SOL];
+    const auto* trans_solver = solver[TRANS_SOL];
+    const auto* Node_Flow = solver[FLOW_SOL]->GetNodes();
+    const auto* Node_Turb = (config->GetKind_Turb_Model() != TURB_MODEL::NONE) ? turb_solver->GetNodes() : nullptr;
+    const auto* Node_Trans = (config->GetKind_Trans_Model() != TURB_TRANS_MODEL::NONE) ? trans_solver->GetNodes() : nullptr;
+    const auto* Node_Geo = geometry->nodes;
+    unsigned long iPoint{0};
+
+    const bool limiter = (config->GetKind_SlopeLimit_Turb() != LIMITER::NONE);
+
+    for(unsigned int index=0; index < probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      if (config->GetViscous()) {
+        if (nDim == 3){
+          SetProbeOutputValue("VORTICITY_X", index, Node_Flow->GetVorticity(iPoint)[0]);
+          SetProbeOutputValue("VORTICITY_Y", index, Node_Flow->GetVorticity(iPoint)[1]);
+          SetProbeOutputValue("VORTICITY_Z", index, Node_Flow->GetVorticity(iPoint)[2]);
+        } else {
+          SetProbeOutputValue("VORTICITY", index, Node_Flow->GetVorticity(iPoint)[2]);
+        }
+        SetProbeOutputValue("Q_CRITERION", index, GetQ_Criterion(Node_Flow->GetVelocityGradient(iPoint)));
+      }
+
+      switch (TurbModelFamily(config->GetKind_Turb_Model())) {
+        case TURB_FAMILY::SA:
+          SetProbeOutputValue("NU_TILDE", index, Node_Turb->GetSolution(iPoint, 0));
+          SetProbeOutputValue("RES_NU_TILDE", index, turb_solver->LinSysRes(iPoint, 0));
+          if (limiter) {
+            SetProbeOutputValue("LIMITER_NU_TILDE", index, Node_Turb->GetLimiter(iPoint, 0));
+          }
+          break;
+
+        case TURB_FAMILY::KW:
+          SetProbeOutputValue("TKE", index, Node_Turb->GetSolution(iPoint, 0));
+          SetProbeOutputValue("DISSIPATION", index, Node_Turb->GetSolution(iPoint, 1));
+          SetProbeOutputValue("RES_TKE", index, turb_solver->LinSysRes(iPoint, 0));
+          SetProbeOutputValue("RES_DISSIPATION", index, turb_solver->LinSysRes(iPoint, 1));
+          if (limiter) {
+            SetProbeOutputValue("LIMITER_TKE", index, Node_Turb->GetLimiter(iPoint, 0));
+            SetProbeOutputValue("LIMITER_DISSIPATION", index, Node_Turb->GetLimiter(iPoint, 1));
+          }
+          break;
+
+        case TURB_FAMILY::NONE: break;
+      }
+
+      /*--- If we got here a turbulence model is being used, therefore there is eddy viscosity. ---*/
+      if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) {
+        SetProbeOutputValue("EDDY_VISCOSITY", index, Node_Flow->GetEddyViscosity(iPoint));
+      }
+
+      if (config->GetSAParsedOptions().bc) {
+        SetProbeOutputValue("INTERMITTENCY", index, Node_Turb->GetGammaBC(iPoint));
+      }
+        
+      switch (config->GetKind_Trans_Model()) {    
+        case TURB_TRANS_MODEL::LM:
+          SetProbeOutputValue("INTERMITTENCY", index, Node_Trans->GetSolution(iPoint, 0));
+          SetProbeOutputValue("RE_THETA_T", index, Node_Trans->GetSolution(iPoint, 1));
+          SetProbeOutputValue("INTERMITTENCY_SEP", index, Node_Trans->GetIntermittencySep(iPoint));
+          SetProbeOutputValue("INTERMITTENCY_EFF", index, Node_Trans->GetIntermittencyEff(iPoint));
+          SetProbeOutputValue("TURB_INDEX", index, Node_Turb->GetTurbIndex(iPoint));
+          SetProbeOutputValue("RES_INTERMITTENCY", index, trans_solver->LinSysRes(iPoint, 0));
+          SetProbeOutputValue("RES_RE_THETA_T", index, trans_solver->LinSysRes(iPoint, 1));
+          break;
+
+        case TURB_TRANS_MODEL::NONE: break;
+      }
+
+      if (config->GetKind_HybridRANSLES() != NO_HYBRIDRANSLES) {
+        SetProbeOutputValue("DES_LENGTHSCALE", index, Node_Flow->GetDES_LengthScale(iPoint));
+        SetProbeOutputValue("WALL_DISTANCE", index, Node_Geo->GetWall_Distance(iPoint));
+      }
+
+      if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
+        const auto Node_Species = solver[SPECIES_SOL]->GetNodes();
+
+        for (unsigned short iVar = 0; iVar < config->GetnSpecies(); iVar++) {
+          SetProbeOutputValue("SPECIES_" + std::to_string(iVar), index, Node_Species->GetSolution(iPoint, iVar));
+          SetProbeOutputValue("RES_SPECIES_" + std::to_string(iVar), index, solver[SPECIES_SOL]->LinSysRes(iPoint, iVar));
+          if (config->GetKind_SlopeLimit_Species() != LIMITER::NONE)
+            SetProbeOutputValue("LIMITER_SPECIES_" + std::to_string(iVar), index, Node_Species->GetLimiter(iPoint, iVar));
+        }
+      }
+    }
+  }
+}
+
+
+void CFlowOutput::LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned int index, unsigned short iMarker, unsigned long iVertex){
+  if (!config->GetViscous_Wall(iMarker)) return;
+
+  const auto heat_sol = (config->GetKind_Regime() == ENUM_REGIME::INCOMPRESSIBLE) &&
+                         config->GetWeakly_Coupled_Heat() ? HEAT_SOL : FLOW_SOL;
+
+  SetProbeOutputValue("SKIN_FRICTION-X", index, solver[FLOW_SOL]->GetCSkinFriction(iMarker, iVertex, 0));
+
+  SetProbeOutputValue("SKIN_FRICTION-Y", index, solver[FLOW_SOL]->GetCSkinFriction(iMarker, iVertex, 1));
+  if (nDim == 3)
+    SetProbeOutputValue("SKIN_FRICTION-Z", index, solver[FLOW_SOL]->GetCSkinFriction(iMarker, iVertex, 2));
+  SetProbeOutputValue("HEAT_FLUX", index, solver[heat_sol]->GetHeatFlux(iMarker, iVertex));
+  SetProbeOutputValue("Y_PLUS", index, solver[FLOW_SOL]->GetYPlus(iMarker, iVertex));
+
+}
+
 void CFlowOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint, unsigned short iMarker, unsigned long iVertex){
 
   if (!config->GetViscous_Wall(iMarker)) return;

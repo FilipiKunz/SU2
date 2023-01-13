@@ -200,6 +200,32 @@ void CAdjFlowOutput::SetVolumeOutputFields_AdjScalarSolution(const CConfig* conf
   }
 }
 
+void CAdjFlowOutput::SetProbeOutputFields_AdjScalarSolution(const CConfig* config, unsigned int nProbe) {
+  if (!frozen_visc) {
+    switch (TurbModelFamily(turb_model)) {
+      case TURB_FAMILY::SA:
+        /// DESCRIPTION: Adjoint nu tilde.
+        AddProbeOutput(nProbe, "ADJ_NU_TILDE", "Adjoint_Nu_Tilde", "SOLUTION", "Adjoint Spalart-Allmaras variable");
+        break;
+      case TURB_FAMILY::KW:
+        /// DESCRIPTION: Adjoint kinetic energy.
+        AddProbeOutput(nProbe, "ADJ_TKE", "Adjoint_TKE", "SOLUTION", "Adjoint turbulent kinetic energy");
+        /// DESCRIPTION: Adjoint dissipation.
+        AddProbeOutput(nProbe, "ADJ_DISSIPATION", "Adjoint_Omega", "SOLUTION", "Adjoint rate of dissipation");
+        break;
+      case TURB_FAMILY::NONE:
+        break;
+    }
+  }
+
+  if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
+    for (unsigned short iVar = 0; iVar < config->GetnSpecies(); iVar++) {
+      AddProbeOutput(nProbe, "ADJ_SPECIES_" + std::to_string(iVar), "Adjoint_Species_" + std::to_string(iVar), "SOLUTION",
+                      "Adjoint Species variable");
+    }
+  }
+}
+
 void CAdjFlowOutput::SetVolumeOutputFields_AdjScalarResidual(const CConfig* config) {
   if (!frozen_visc) {
     switch (TurbModelFamily(turb_model)) {
@@ -224,6 +250,35 @@ void CAdjFlowOutput::SetVolumeOutputFields_AdjScalarResidual(const CConfig* conf
   if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
     for (unsigned short iVar = 0; iVar < config->GetnSpecies(); iVar++) {
       AddVolumeOutput("RES_ADJ_SPECIES_" + std::to_string(iVar), "Residual_Adjoint_Species_" + std::to_string(iVar),
+                      "RESIDUAL", "Residual of the adjoint Species variable");
+    }
+  }
+}
+
+void CAdjFlowOutput::SetProbeOutputFields_AdjScalarResidual(const CConfig* config, unsigned int nProbe) {
+  if (!frozen_visc) {
+    switch (TurbModelFamily(turb_model)) {
+      case TURB_FAMILY::SA:
+        /// DESCRIPTION: Residual of the nu tilde.
+        AddProbeOutput(nProbe, "RES_ADJ_NU_TILDE", "Residual_Adjoint_Nu_Tilde", "RESIDUAL",
+                        "Residual of the adjoint Spalart-Allmaras variable");
+        break;
+      case TURB_FAMILY::KW:
+        /// DESCRIPTION: Residual of the adjoint kinetic energy.
+        AddProbeOutput(nProbe, "RES_ADJ_TKE", "Residual_Adjoint_TKE", "RESIDUAL",
+                        "Residual of the adjoint turb. kinetic energy");
+        /// DESCRIPTION: Residual of the adjoint dissipation.
+        AddProbeOutput(nProbe, "RES_ADJ_DISSIPATION", "Residual_Adjoint_Omega", "RESIDUAL",
+                        "Residual of adjoint rate of dissipation");
+        break;
+      case TURB_FAMILY::NONE:
+        break;
+    }
+  }
+
+  if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
+    for (unsigned short iVar = 0; iVar < config->GetnSpecies(); iVar++) {
+      AddProbeOutput(nProbe, "RES_ADJ_SPECIES_" + std::to_string(iVar), "Residual_Adjoint_Species_" + std::to_string(iVar),
                       "RESIDUAL", "Residual of the adjoint Species variable");
     }
   }

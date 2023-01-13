@@ -77,4 +77,13 @@ public:
    */
   void LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint) override;
 
+  /*!
+   * \brief Set the values of the probe output fields for a point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] Probe_pointID - Vector of probe's IDs.
+   */
+  void LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver) override;
+
 };

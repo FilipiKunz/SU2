@@ -41,6 +41,11 @@ protected:
    */
   void AddCoordinates();
 
+/*!
+   * \brief Add Coordinates to output.
+   */
+  void AddProbeCoordinates(unsigned int nProbe);
+
   /*!
    * \brief Load the coordinates.
    */
@@ -51,6 +56,18 @@ protected:
     if (nDim == 3)
       SetVolumeOutputValue("COORD-Z", iPoint, Coord[2]);
   }
+
+  /*!
+   * \brief Load the coordinates.
+   */
+  template<class T>
+  inline void LoadProbeCoordinates(const T& Coord, const unsigned int index) {
+    SetProbeOutputValue("COORD-X", index, Coord[0]);
+    SetProbeOutputValue("COORD-Y", index, Coord[1]);
+    if (nDim == 3)
+      SetProbeOutputValue("COORD-Z", index, Coord[2]);
+  }
+
 
   /*!
    * \brief Add common FVM outputs.

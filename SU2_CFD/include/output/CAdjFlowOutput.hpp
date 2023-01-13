@@ -86,6 +86,20 @@ class CAdjFlowOutput : public COutput {
   void SetVolumeOutputFields_AdjScalarResidual(const CConfig* config);
 
   /*!
+   * \brief Add scalar (turbulence/species) probe solution fields for a point (FVMComp, FVMInc, FVMNEMO).
+   * \note The order of fields in restart files is fixed. Therefore the split-up.
+   * \param[in] config - Definition of the particular problem.
+   */
+  void SetProbeOutputFields_AdjScalarSolution(const CConfig* config, unsigned int nProbe);
+
+  /*!
+   * \brief Add scalar (turbulence/species) volume solution fields for a point (FVMComp, FVMInc, FVMNEMO).
+   * \note The order of fields in restart files is fixed. Therefore the split-up.
+   * \param[in] config - Definition of the particular problem.
+   */
+  void SetProbeOutputFields_AdjScalarResidual(const CConfig* config, unsigned int nProbe);
+
+  /*!
    * \brief Set all scalar (turbulence/species) volume field values for a point.
    * \param[in] config - Definition of the particular problem.
    * \param[in] solver - The container holding all solution data.

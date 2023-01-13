@@ -404,10 +404,153 @@ void CAdjFlowIncOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CS
 
 }
 
+void CAdjFlowIncOutput::LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned int iProbe, unsigned short iMarker, unsigned long iVertex){
+
+  SetProbeOutputValue("SENSITIVITY", iProbe, solver[ADJFLOW_SOL]->GetCSensitivity(iMarker, iVertex));
+
+}
+
+void CAdjFlowIncOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    CVariable* Node_AdjFlow = solver[ADJFLOW_SOL]->GetNodes();
+    CVariable* Node_AdjHeat = nullptr;
+    CVariable* Node_AdjRad  = nullptr;
+    CPoint*    Node_Geo     = geometry->nodes;
+    unsigned long iPoint {0};
+
+    if (weakly_coupled_heat){
+      Node_AdjHeat = solver[ADJHEAT_SOL]->GetNodes();
+    }
+    if (config->GetKind_RadiationModel() != RADIATION_MODEL::NONE){
+      Node_AdjRad = solver[ADJRAD_SOL]->GetNodes();
+    }
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      SetProbeOutputValue("COORD-X", index,  Node_Geo->GetCoord(iPoint, 0));
+      SetProbeOutputValue("COORD-Y", index,  Node_Geo->GetCoord(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("COORD-Z", index, Node_Geo->GetCoord(iPoint, 2));
+
+      SetProbeOutputValue("ADJ_PRESSURE",   index, Node_AdjFlow->GetSolution(iPoint, 0));
+      SetProbeOutputValue("ADJ_VELOCITY-X", index, Node_AdjFlow->GetSolution(iPoint, 1));
+      SetProbeOutputValue("ADJ_VELOCITY-Y", index, Node_AdjFlow->GetSolution(iPoint, 2));
+      if (nDim == 3){
+        SetProbeOutputValue("ADJ_VELOCITY-Z", index, Node_AdjFlow->GetSolution(iPoint, 3));
+      }
+
+      if (weakly_coupled_heat){
+        SetProbeOutputValue("ADJ_TEMPERATURE", index, Node_AdjHeat->GetSolution(iPoint, 0));
+      }
+      else {
+        if (nDim == 3) SetProbeOutputValue("ADJ_TEMPERATURE", index, Node_AdjFlow->GetSolution(iPoint, 4));
+        else           SetProbeOutputValue("ADJ_TEMPERATURE", index, Node_AdjFlow->GetSolution(iPoint, 3));
+      }
+
+      // Radiation
+      if (config->AddRadiation()){
+        SetProbeOutputValue("ADJ_P1_ENERGY", index, Node_AdjRad->GetSolution(iPoint, 0));
+      }
+
+      // Residuals
+      SetProbeOutputValue("RES_ADJ_PRESSURE",   index, Node_AdjFlow->GetSolution(iPoint, 0) - Node_AdjFlow->GetSolution_Old(iPoint, 0));
+      SetProbeOutputValue("RES_ADJ_VELOCITY-X", index, Node_AdjFlow->GetSolution(iPoint, 1) - Node_AdjFlow->GetSolution_Old(iPoint, 1));
+      SetProbeOutputValue("RES_ADJ_VELOCITY-Y", index, Node_AdjFlow->GetSolution(iPoint, 2) - Node_AdjFlow->GetSolution_Old(iPoint, 2));
+      if (nDim == 3){
+        SetProbeOutputValue("RES_ADJ_VELOCITY-Z", index, Node_AdjFlow->GetSolution(iPoint, 3) - Node_AdjFlow->GetSolution_Old(iPoint, 3));
+        SetProbeOutputValue("RES_ADJ_TEMPERATURE",     index, Node_AdjFlow->GetSolution(iPoint, 4) - Node_AdjFlow->GetSolution_Old(iPoint, 4));
+      } else {
+        SetProbeOutputValue("RES_ADJ_TEMPERATURE",     index, Node_AdjFlow->GetSolution(iPoint, 3) - Node_AdjFlow->GetSolution_Old(iPoint, 3));
+      }
+
+      if (config->AddRadiation()){
+        SetProbeOutputValue("RES_P1_ENERGY", index, Node_AdjRad->GetSolution(iPoint, 0) - Node_AdjRad->GetSolution_Old(iPoint, 0));
+      }
+
+      SetProbeOutputValue("SENSITIVITY-X", index, Node_AdjFlow->GetSensitivity(iPoint, 0));
+      SetProbeOutputValue("SENSITIVITY-Y", index, Node_AdjFlow->GetSensitivity(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("SENSITIVITY-Z", index, Node_AdjFlow->GetSensitivity(iPoint, 2));
+    }
+  }
+}
+
 
 bool CAdjFlowIncOutput::SetInit_Residuals(const CConfig *config){
 
   return (config->GetTime_Marching() != TIME_MARCHING::STEADY && (curInnerIter == 0))||
          (config->GetTime_Marching() == TIME_MARCHING::STEADY && (curTimeIter < 2));
+
+}
+
+void CAdjFlowIncOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+
+  // Grid coordinates
+  AddProbeOutput(nProbe, "COORD-X", "x", "COORDINATES", "x-component of the coordinate vector");
+  AddProbeOutput(nProbe, "COORD-Y", "y", "COORDINATES", "y-component of the coordinate vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "COORD-Z", "z", "COORDINATES", "z-component of the coordinate vector");
+
+  /// BEGIN_GROUP: SOLUTION, DESCRIPTION: The SOLUTION variables of the adjoint solver.
+  /// DESCRIPTION: Adjoint Pressure.
+  AddProbeOutput(nProbe, "ADJ_PRESSURE",    "Adjoint_Pressure",    "SOLUTION", "Adjoint pressure");
+  /// DESCRIPTION: Adjoint Velocity x-component.
+  AddProbeOutput(nProbe, "ADJ_VELOCITY-X", "Adjoint_Velocity_x", "SOLUTION", "x-component of the adjoint velocity vector");
+  /// DESCRIPTION: Adjoint Velocity y-component.
+  AddProbeOutput(nProbe, "ADJ_VELOCITY-Y", "Adjoint_Velocity_y", "SOLUTION", "y-component of the adjoint velocity vector");
+  if (nDim == 3)
+    /// DESCRIPTION: Adjoint Velocity z-component.
+    AddProbeOutput(nProbe, "ADJ_VELOCITY-Z", "Adjoint_Velocity_z", "SOLUTION", "z-component of the adjoint velocity vector");
+
+  AddProbeOutput(nProbe, "ADJ_TEMPERATURE", "Adjoint_Temperature", "SOLUTION",  "Adjoint temperature");
+
+  SetProbeOutputFields_AdjScalarSolution(config, nProbe);
+
+  if (config->AddRadiation()){
+    AddProbeOutput(nProbe, "ADJ_P1_ENERGY",  "Adjoint_Energy(P1)", "SOLUTION", "Adjoint radiative energy");
+  }
+  /// END_GROUP
+
+  // Grid velocity
+  if (config->GetDynamic_Grid()){
+    AddProbeOutput(nProbe, "GRID_VELOCITY-X", "Grid_Velocity_x", "GRID_VELOCITY", "x-component of the grid velocity vector");
+    AddProbeOutput(nProbe, "GRID_VELOCITY-Y", "Grid_Velocity_y", "GRID_VELOCITY", "y-component of the grid velocity vector");
+    if (nDim == 3 )
+      AddProbeOutput(nProbe, "GRID_VELOCITY-Z", "Grid_Velocity_z", "GRID_VELOCITY", "z-component of the grid velocity vector");
+  }
+
+  /// BEGIN_GROUP: RESIDUAL, DESCRIPTION: Residuals of the SOLUTION variables.
+  /// DESCRIPTION: Residual of the adjoint Pressure.
+  AddProbeOutput(nProbe, "RES_ADJ_PRESSURE",    "Residual_Adjoint_Pressure",    "RESIDUAL", "Residual of the adjoint pressure");
+  /// DESCRIPTION: Residual of the adjoint Velocity x-component.
+  AddProbeOutput(nProbe, "RES_ADJ_VELOCITY-X", "Residual_Adjoint_Velocity_x", "RESIDUAL", "Residual of the adjoint x-velocity");
+  /// DESCRIPTION: Residual of the adjoint Velocity y-component.
+  AddProbeOutput(nProbe, "RES_ADJ_VELOCITY-Y", "Residual_Adjoint_Velocity_y", "RESIDUAL", "Residual of the adjoint y-velocity");
+  if (nDim == 3)
+    /// DESCRIPTION: Residual of the adjoint Velocity z-component.
+    AddProbeOutput(nProbe, "RES_ADJ_VELOCITY-Z", "Residual_Adjoint_Velocity_z", "RESIDUAL", "Residual of the adjoint z-velocity");
+  /// DESCRIPTION: Residual of the adjoint energy.
+  AddProbeOutput(nProbe, "RES_ADJ_TEMPERATURE", "Residual_Adjoint_Heat", "RESIDUAL", "Residual of the adjoint temperature");
+
+  SetProbeOutputFields_AdjScalarResidual(config, nProbe);
+
+  if (config->AddRadiation()){
+    AddProbeOutput(nProbe, "RES_P1_ENERGY",  "Residual_Adjoint_Energy_P1", "RESIDUAL", "Residual of adjoint radiative energy");
+  }
+  /// END_GROUP
+
+  /// BEGIN_GROUP: SENSITIVITY, DESCRIPTION: Geometrical sensitivities of the current objective function.
+  /// DESCRIPTION: Sensitivity x-component.
+  AddProbeOutput(nProbe, "SENSITIVITY-X", "Sensitivity_x", "SENSITIVITY", "x-component of the sensitivity vector");
+  /// DESCRIPTION: Sensitivity y-component.
+  AddProbeOutput(nProbe, "SENSITIVITY-Y", "Sensitivity_y", "SENSITIVITY", "y-component of the sensitivity vector");
+  if (nDim == 3)
+    /// DESCRIPTION: Sensitivity z-component.
+    AddProbeOutput(nProbe, "SENSITIVITY-Z", "Sensitivity_z", "SENSITIVITY", "z-component of the sensitivity vector");
+  /// DESCRIPTION: Sensitivity in normal direction.
+  AddProbeOutput(nProbe, "SENSITIVITY", "Surface_Sensitivity", "SENSITIVITY", "sensitivity in normal direction");
+  /// END_GROUP
 
 }

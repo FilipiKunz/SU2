@@ -79,6 +79,18 @@ public:
                          unsigned long iElem, unsigned long index, unsigned short dof) override;
 
   /*!
+   * \brief Set the values of the probe output fields for a point.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver - The container holding all solution data.
+   * \param[in] iElem - Index of the element.
+   * \param[in] Probe_pointID - Vector of probe's IDs.
+   * \param[in] dof - Index of the local degree of freedom.
+   */
+  void LoadProbeDataFEM(CConfig *config, CGeometry *geometry, CSolver **solver,
+                         unsigned long iElem, unsigned short dof) override;
+
+  /*!
    * \brief Set the available history output fields
    * \param[in] config - Definition of the particular problem.
    */

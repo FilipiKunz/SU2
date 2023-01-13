@@ -54,7 +54,8 @@ COutput::COutput(const CConfig *config, unsigned short ndim, bool fem_output):
   gridMovement(config->GetDynamic_Grid()),
   femOutput(fem_output),
   si_units(config->GetSystemMeasurements() == SI),
-  us_units(config->GetSystemMeasurements() == US) {
+  us_units(config->GetSystemMeasurements() == US),
+  nProbe(config->GetnProbe()) {
 
   cauchyTimeConverged = false;
 
@@ -68,6 +69,7 @@ COutput::COutput(const CConfig *config, unsigned short ndim, bool fem_output):
   surfaceFilename = "surface";
   volumeFilename  = "volume";
   restartFilename = "restart";
+  probeFilename   = config->GetProbe_FolderName() + "probe";
 
   /*--- Retrieve the history filename ---*/
 
@@ -108,6 +110,16 @@ COutput::COutput(const CConfig *config, unsigned short ndim, bool fem_output):
   nRequestedVolumeFields = config->GetnVolumeOutput();
   for (unsigned short iField = 0; iField < nRequestedVolumeFields; iField++){
     requestedVolumeFields.push_back(config->GetVolumeOutput_Field(iField));
+  }
+
+  if(config->GetnProbe() > 0){
+    if (config->GetTime_Domain() && config->GetRestart()) {
+      probeFilename = config->GetUnsteady_FileName(probeFilename, config->GetRestart_Iter(), "");
+    }
+    nRequestedProbeFields = config->GetnProbeOutput();
+    for (unsigned short iField = 0; iField < nRequestedProbeFields; iField++){
+      requestedProbeFields.push_back(config->GetProbeOutput_Field(iField));
+    }
   }
 
   /*--- Default is to write history to file and screen --- */
@@ -178,6 +190,7 @@ COutput::~COutput(void) {
   delete multiZoneHeaderTable;
   delete fileWritingTable;
   delete historyFileTable;
+  vector<PrintingToolbox::CTablePrinter*>().swap(probeFileTable); // It will release the memory, instead of just cleaning the vector.
   delete volumeDataSorter;
   delete surfaceDataSorter;
 
@@ -195,6 +208,39 @@ void COutput::SetHistory_Output(CGeometry *geometry,
   curOuterIter = OuterIter;
   curInnerIter = InnerIter;
 
+  /* Print out probe files */
+
+  LoadCommonProbeData(config, geometry);
+  LoadProbeData(config, geometry, solver_container);
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+
+    unsigned short iMarker = 0;
+    unsigned long iVertex = 0;
+    unsigned long nVertex = geometry->GetnVertex(iMarker);
+    unsigned long iPoint = 0;
+
+    for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+      for(unsigned int index=0; index<probe_list.size(); index++){
+        
+        iPoint = probe_list[index].pointID;
+
+      /*--- We only want to have surface values on solid walls ---*/
+
+        if (config->GetSolid_Wall(iMarker)){
+
+          iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
+
+          /*--- Load the surface data into the data sorter. --- */
+          if(iVertex < nVertex)
+            LoadProbeSurfaceData(config, geometry, solver_container, index, iMarker, iVertex);
+
+        }
+      }
+    }
+  }
+
   /*--- Retrieve residual and extra data -----------------------------------------------------------------*/
 
   LoadCommonHistoryData(config);
@@ -207,7 +253,7 @@ void COutput::SetHistory_Output(CGeometry *geometry,
 
   MonitorTimeConvergence(config, curTimeIter);
 
-  OutputScreenAndHistory(config);
+  OutputScreenAndHistory(config, geometry);
 
 }
 
@@ -215,9 +261,45 @@ void COutput::SetHistory_Output(CGeometry *geometry,
                                 CSolver **solver_container,
                                 CConfig *config) {
 
+  /* Print out probe files */
+
+  LoadCommonProbeData(config, geometry);
+  LoadProbeData(config, geometry, solver_container);
+  
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+
+    unsigned short iMarker = 0;
+    unsigned long iVertex = 0;
+    unsigned long nVertex = geometry->GetnVertex(iMarker);
+    unsigned long iPoint = 0;
+    auto probe_list = geometry->GetProbe_list();
+
+    for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+      for(unsigned int index=0; index<probe_list.size(); index++){
+        
+        iPoint = probe_list[index].pointID;
+
+      /*--- We only want to have surface values on solid walls ---*/
+
+        if (config->GetSolid_Wall(iMarker)){
+
+          iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
+
+          /*--- Load the surface data into the data sorter. --- */
+          if(iVertex < nVertex)
+            LoadProbeSurfaceData(config, geometry, solver_container, index, iMarker, iVertex);
+
+        }
+      }
+    }
+  }
+
   /*--- Retrieve residual and extra data -----------------------------------------------------------------*/
 
   LoadCommonHistoryData(config);
+
+  LoadCommonProbeData(config, geometry);
 
   LoadHistoryData(config, geometry, solver_container);
 
@@ -260,6 +342,24 @@ void COutput::OutputScreenAndHistory(CConfig *config) {
     if (WriteScreen_Output(config)) SetScreen_Output(config);
 
   }
+}
+
+void COutput::OutputScreenAndHistory(CConfig *config, CGeometry *geometry) {
+
+  if (rank == MASTER_NODE && !noWriting) {
+
+    if (WriteHistoryFile_Output(config)) SetHistoryFile_Output(config);
+
+    if (WriteScreen_Header(config)) SetScreen_Header(config);
+
+    if (WriteScreen_Output(config)) SetScreen_Output(config);
+  }
+
+  auto probe_list = geometry->GetProbe_list();
+  if (probe_list.size()>0 && probe_list[0].rankID==rank)
+    if (WriteHistoryFile_Output(config)) SetProbeFile_Output(config, geometry);
+  
+      
 }
 
 void COutput::SetupCustomHistoryOutput(const std::string& expression, CustomHistoryOutput& output) const {
@@ -1269,6 +1369,61 @@ void COutput::SetScreen_Output(const CConfig *config) {
   SetAdditionalScreenOutput(config);
 }
 
+void COutput::SetProbeFile_Header(const CConfig *config, PrintingToolbox::CTablePrinter* probeFileTable, ofstream &probeFile) {
+
+  unsigned short iField_Output = 0,
+      iReqField = 0,
+      iMarker = 0;
+  stringstream out;
+  int width = 20;
+  for (iField_Output = 0; iField_Output < probeOutput_List.size(); iField_Output++){
+    const string &fieldIdentifier = probeOutput_List[iField_Output];
+    const ProbeOutputField &field = probeOutput_Map[0].at(fieldIdentifier);
+    for (iReqField = 0; iReqField < nRequestedProbeFields; iReqField++){
+      const string & requestedField = requestedProbeFields[iReqField];
+      if (requestedField == field.outputGroup || (requestedField == fieldIdentifier)){
+        width = std::max((int)field.fieldName.size()+2, 18);
+        probeFileTable->AddColumn("\"" + field.fieldName + "\"", width);
+      }
+    }
+  }
+
+  probeFileTable->PrintHeader();
+  probeFile.flush();
+
+}
+
+
+void COutput::SetProbeFile_Output(const CConfig *config, CGeometry *geometry) {
+
+  auto probe_list = geometry->GetProbe_list();
+
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      unsigned int iProbe = probe_list[index].probeID;
+      if (requestedProbeFieldCache[index].empty()) {
+        for (const auto& fieldIdentifier : probeOutput_List){
+          const auto& field = probeOutput_Map[index].at(fieldIdentifier);
+          for (const auto& requestedField : requestedProbeFields) {
+            if ((requestedField == field.outputGroup) || (requestedField == fieldIdentifier)) {
+              requestedProbeFieldCache[index].push_back(&field.value);
+            }
+          }
+        }
+      }
+
+      for (const auto* valPtr : requestedProbeFieldCache[index]) {
+        (*probeFileTable[index]) << *valPtr;
+      }
+
+      /*--- Print the string to file and remove the last two characters (a separator and a space) ---*/
+
+      probeFile[index].flush();
+    }
+  }
+
+}
+
 void COutput::PreprocessHistoryOutput(CConfig *config, bool wrt){
 
   noWriting = !wrt;
@@ -1384,6 +1539,33 @@ void COutput::PrepareHistoryFile(CConfig *config){
   /*--- Add the header to the history file. ---*/
 
   SetHistoryFile_Header(config);
+
+}
+
+void COutput::PrepareProbeFile(CConfig *config, CGeometry *geometry){
+
+  auto probe_list = geometry->GetProbe_list();
+
+  for(unsigned int index=0; index < probe_list.size(); index++){
+    unsigned int iProbe = probe_list[index].probeID;
+
+    /*--- Open the probe(s) file(s) ---*/
+    string hist_ext = (config->GetTabular_FileFormat() == TAB_OUTPUT::TAB_TECPLOT)? ".dat":".csv";
+    probeFile[index].open(probeFilename+"_"+to_string(iProbe)+hist_ext, ios::out);
+
+    /*--- Create and format the history file table ---*/
+
+    probeFileTable[index]->SetInnerSeparator(historySep);
+    probeFileTable[index]->SetAlign(PrintingToolbox::CTablePrinter::CENTER);
+    probeFileTable[index]->SetPrintHeaderTopLine(false);
+    probeFileTable[index]->SetPrintHeaderBottomLine(false);
+    probeFileTable[index]->SetPrecision(config->GetOutput_Precision());
+
+    /*--- Add the header to the history file. ---*/
+
+    SetProbeFile_Header(config, probeFileTable[index], probeFile[index]);
+
+  }
 
 }
 
@@ -1682,6 +1864,113 @@ void COutput::PreprocessVolumeOutput(CConfig *config){
   }
 }
 
+void COutput::PreprocessProbeOutput(CConfig *config, CGeometry *geometry, bool wrt){
+
+  if(config->GetnProbe()>0){
+    /*--- Set the volume output fields using a virtual function call to the child implementation ---*/
+    auto probe_list = geometry->GetProbe_list();
+    if((probe_list.size()>0 && probe_list[0].rankID==rank) || rank==MASTER_NODE){
+
+      SetCommonProbeFields(config, probe_list.size());
+      SetProbeOutputFields(config, probe_list.size());
+
+      nProbeFields = 0;
+
+      string RequestedField;
+      std::vector<bool> FoundField(nRequestedProbeFields, false);
+      vector<string> FieldsToRemove;
+
+
+      /*--- Loop through all fields defined in the corresponding SetProbeOutputFields().
+    * If it is also defined in the config (either as part of a group or a single field), the field
+    * object gets an offset so that we know where to find the data in the Local_Data() array.
+    *  Note that the default offset is -1. An index !=-1 defines this field as part of the output. ---*/
+      for (unsigned short iField_Output = 0; iField_Output < probeOutput_List.size(); iField_Output++){
+
+        const string &fieldReference = probeOutput_List[iField_Output];
+        if (probeOutput_Map[0].count(fieldReference) > 0){
+          ProbeOutputField &Field = probeOutput_Map[0].at(fieldReference);
+
+          /*--- Loop through all fields specified in the config ---*/
+
+          for (unsigned short iReqField = 0; iReqField < nRequestedProbeFields; iReqField++){
+
+            RequestedField = requestedProbeFields[iReqField];
+
+            if (((RequestedField == Field.outputGroup) || (RequestedField == fieldReference)) && (Field.offset == -1)){
+              Field.offset = nProbeFields;
+              probeFieldNames.push_back(Field.fieldName);
+              nProbeFields++;
+
+              FoundField[iReqField] = true;
+            }
+          }
+        }
+      }
+
+      for (unsigned short iReqField = 0; iReqField < nRequestedProbeFields; iReqField++){
+        if (!FoundField[iReqField]){
+          FieldsToRemove.push_back(requestedProbeFields[iReqField]);
+        }
+      }
+
+      /*--- Remove fields which are not defined --- */
+
+      for (unsigned short iReqField = 0; iReqField < FieldsToRemove.size(); iReqField++){
+        if (rank == MASTER_NODE) {
+          if (iReqField == 0){
+            cout << "  Info: Ignoring the following probe output fields/groups:" << endl;
+            cout << "  ";
+          }
+          cout << FieldsToRemove[iReqField];
+          if (iReqField != FieldsToRemove.size()-1){
+            cout << ", ";
+          } else {
+            cout << endl;
+          }
+        }
+        requestedProbeFields.erase(std::find(requestedProbeFields.begin(),
+                                              requestedProbeFields.end(), FieldsToRemove[iReqField]));
+      }
+
+      nRequestedProbeFields = requestedProbeFields.size();
+
+      if (rank == MASTER_NODE){
+        cout <<"Probe output fields: ";
+        for (unsigned short iReqField = 0; iReqField < nRequestedProbeFields; iReqField++){
+          RequestedField = requestedProbeFields[iReqField];
+          cout << requestedProbeFields[iReqField];
+          if (iReqField != nRequestedProbeFields - 1) cout << ", ";
+        }
+        cout << endl;
+
+      }
+
+      noWriting = !wrt;
+
+      /*--- We use a fixed size of the file output summary table ---*/
+      int total_width = 72;
+      fileWritingTable->AddColumn("File Writing Summary", (total_width)/2-1);
+      fileWritingTable->AddColumn("Filename", total_width/2-1);
+      fileWritingTable->SetAlign(PrintingToolbox::CTablePrinter::LEFT);
+
+      if (probe_list.size()>0 && rank == probe_list[0].rankID && !noWriting){
+        probeFile.resize(probe_list.size());
+        probeFileTable.resize(probe_list.size());
+        requestedProbeFieldCache.resize(probe_list.size());
+
+        for(unsigned int index=0; index < probe_list.size(); index++){
+          probeFileTable.at(index) = new PrintingToolbox::CTablePrinter(&probeFile[index], "");
+        }
+
+        /*--- Open history file and print the header ---*/
+        if (!config->GetMultizone_Problem() || config->GetWrt_ZoneHist())
+          PrepareProbeFile(config, geometry);
+        }
+      }
+  }
+}
+
 void COutput::LoadDataIntoSorter(CConfig* config, CGeometry* geometry, CSolver** solver){
 
   unsigned short iMarker = 0;
@@ -1826,6 +2115,14 @@ su2double COutput::GetVolumeOutputValue(string name, unsigned long iPoint){
   }
 
   return 0.0;
+}
+
+void COutput::SetProbeOutputValue(string name, unsigned int index, su2double value){
+
+  if (probeOutput_Map[index].count(name) > 0){
+    probeOutput_Map[index].at(name).value = value;
+  }
+
 }
 
 void COutput::SetAvgVolumeOutputValue(string name, unsigned long iPoint, su2double value){
@@ -2165,6 +2462,24 @@ void COutput::SetCommonHistoryFields() {
 
 }
 
+void COutput::SetCommonProbeFields(const CConfig* config, unsigned int nProbe) {
+
+  /// BEGIN_GROUP: ITERATION, DESCRIPTION: Iteration identifier.
+  /// DESCRIPTION: The time iteration index.
+  AddProbeOutput(nProbe, "TIME_ITER", "Time_Iter", "ITER", "Time iteration index");
+  /// DESCRIPTION: The outer iteration index.
+  AddProbeOutput(nProbe, "OUTER_ITER", "Outer_Iter", "ITER", "Outer iteration index");
+  /// DESCRIPTION: The inner iteration index.
+  AddProbeOutput(nProbe, "INNER_ITER", "Inner_Iter",  "ITER", "Inner iteration index");
+  /// END_GROUP
+
+  /// BEGIN_GROUP: TIME_DOMAIN, DESCRIPTION: Time integration information
+  /// Description: The current time
+  AddProbeOutput(nProbe, "CUR_TIME", "Cur_Time", "TIME_DOMAIN", "Current physical time (s)");
+  /// Description: The current time step
+  AddProbeOutput(nProbe, "TIME_STEP", "Time_Step", "TIME_DOMAIN", "Current time step (s)");
+
+}
 void COutput::SetCustomOutputs(const CConfig* config) {
 
   const auto& inputString = config->GetCustomOutputs();
@@ -2312,6 +2627,26 @@ void COutput::LoadCommonHistoryData(const CConfig *config) {
   SetHistoryOutputValue("WALL_TIME", UsedTime);
 
   SetHistoryOutputValue("NONPHYSICAL_POINTS", config->GetNonphysical_Points());
+}
+
+void COutput::LoadCommonProbeData(const CConfig *config, CGeometry *geometry) {
+
+  auto probe_list = geometry->GetProbe_list();
+
+  if(probe_list.size() && probe_list[0].rankID==rank)
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      SetProbeOutputValue("TIME_STEP", index, config->GetDelta_UnstTimeND()*config->GetTime_Ref());
+
+      /*--- Update the current time only if the time iteration has changed ---*/
+
+      if (SU2_TYPE::Int(GetProbeFieldValue(index, "TIME_ITER")) != static_cast<int>(curTimeIter)) {
+        SetProbeOutputValue("CUR_TIME", index,  GetProbeFieldValue(index, "CUR_TIME") + GetProbeFieldValue(index, "TIME_STEP"));
+      }
+
+      SetProbeOutputValue("TIME_ITER", index,  curTimeIter);
+      SetProbeOutputValue("INNER_ITER", index, curInnerIter);
+      SetProbeOutputValue("OUTER_ITER", index, curOuterIter);
+    }
 }
 
 

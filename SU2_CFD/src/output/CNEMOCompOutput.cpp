@@ -290,6 +290,80 @@ void CNEMOCompOutput::SetVolumeOutputFields(CConfig *config){
   }
 }
 
+void CNEMOCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+
+  unsigned short nSpecies = config->GetnSpecies();
+
+  // Grid coordinates
+  AddProbeCoordinates(nProbe);
+
+  // Solution variables
+  for(iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+    AddProbeOutput(nProbe, "DENSITY_" + std::to_string(iSpecies),  "Density_" + std::to_string(iSpecies),  "SOLUTION", "Density_"  + std::to_string(iSpecies));
+
+  AddProbeOutput(nProbe, "MOMENTUM-X", "Momentum_x", "SOLUTION", "x-component of the momentum vector");
+  AddProbeOutput(nProbe, "MOMENTUM-Y", "Momentum_y", "SOLUTION", "y-component of the momentum vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "MOMENTUM-Z", "Momentum_z", "SOLUTION", "z-component of the momentum vector");
+  AddProbeOutput(nProbe, "ENERGY",       "Energy",     "SOLUTION", "Energy");
+  AddProbeOutput(nProbe, "ENERGY_VE",    "Energy_ve",  "SOLUTION", "Energy_ve");
+
+  //Auxiliary variables for post-processment
+  for(iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+    AddProbeOutput(nProbe, "MASSFRAC_" + std::to_string(iSpecies),  "MassFrac_" + std::to_string(iSpecies),  "AUXILIARY", "MassFrac_" + std::to_string(iSpecies));
+
+  // Grid velocity
+  if (gridMovement){
+    AddProbeOutput(nProbe, "GRID_VELOCITY-X", "Grid_Velocity_x", "GRID_VELOCITY", "x-component of the grid velocity vector");
+    AddProbeOutput(nProbe, "GRID_VELOCITY-Y", "Grid_Velocity_y", "GRID_VELOCITY", "y-component of the grid velocity vector");
+    if (nDim == 3 )
+      AddProbeOutput(nProbe, "GRID_VELOCITY-Z", "Grid_Velocity_z", "GRID_VELOCITY", "z-component of the grid velocity vector");
+  }
+
+  // Primitive variables
+  AddProbeOutput(nProbe, "PRESSURE",       "Pressure",       "PRIMITIVE", "Pressure");
+  AddProbeOutput(nProbe, "TEMPERATURE_TR", "Temperature_tr", "PRIMITIVE", "Temperature_tr");
+  AddProbeOutput(nProbe, "TEMPERATURE_VE", "Temperature_ve", "PRIMITIVE", "Temperature_ve");
+
+  AddProbeOutput(nProbe, "MACH",        "Mach",                    "PRIMITIVE", "Mach number");
+  AddProbeOutput(nProbe, "PRESSURE_COEFF", "Pressure_Coefficient", "PRIMITIVE", "Pressure coefficient");
+
+  if (config->GetViscous()) {
+    AddProbeOutput(nProbe, "LAMINAR_VISCOSITY", "Laminar_Viscosity", "PRIMITIVE", "Laminar viscosity");
+
+    AddProbeOutput(nProbe, "SKIN_FRICTION-X", "Skin_Friction_Coefficient_x", "PRIMITIVE", "x-component of the skin friction vector");
+    AddProbeOutput(nProbe, "SKIN_FRICTION-Y", "Skin_Friction_Coefficient_y", "PRIMITIVE", "y-component of the skin friction vector");
+    if (nDim == 3)
+     AddProbeOutput(nProbe, "SKIN_FRICTION-Z", "Skin_Friction_Coefficient_z", "PRIMITIVE", "z-component of the skin friction vector");
+
+    AddProbeOutput(nProbe, "HEAT_FLUX", "Heat_Flux", "PRIMITIVE", "Heat-flux");
+    AddProbeOutput(nProbe, "Y_PLUS", "Y_Plus", "PRIMITIVE", "Non-dim. wall distance (Y-Plus)");
+
+  }
+
+  //Residuals
+  for(iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+    AddProbeOutput(nProbe, "RES_DENSITY_" + std::to_string(iSpecies), "Residual_Density_" + std::to_string(iSpecies), "RESIDUAL", "Residual of species density " + std::to_string(iSpecies));
+  AddProbeOutput(nProbe, "RES_MOMENTUM-X", "Residual_Momentum_x", "RESIDUAL", "Residual of the x-momentum component");
+  AddProbeOutput(nProbe, "RES_MOMENTUM-Y", "Residual_Momentum_y", "RESIDUAL", "Residual of the y-momentum component");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "RES_MOMENTUM-Z", "Residual_Momentum_z", "RESIDUAL", "Residual of the z-momentum component");
+  AddProbeOutput(nProbe, "RES_ENERGY",    "Residual_Energy",    "RESIDUAL", "Residual of the energy");
+  AddProbeOutput(nProbe, "RES_ENERGY_VE", "Residual_Energy_ve", "RESIDUAL", "Residual of the energy_ve");
+
+  if (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE && config->GetKind_SlopeLimit_Flow() != LIMITER::VAN_ALBADA_EDGE) {
+    // Limiter values
+    AddProbeOutput(nProbe, "LIMITER_DENSITY", "Limiter_Density", "LIMITER", "Limiter value of the density");
+    AddProbeOutput(nProbe, "LIMITER_MOMENTUM-X", "Limiter_Momentum_x", "LIMITER", "Limiter value of the x-momentum");
+    AddProbeOutput(nProbe, "LIMITER_MOMENTUM-Y", "Limiter_Momentum_y", "LIMITER", "Limiter value of the y-momentum");
+    if (nDim == 3)
+      AddProbeOutput(nProbe, "LIMITER_MOMENTUM-Z", "Limiter_Momentum_z", "LIMITER", "Limiter value of the z-momentum");
+    AddProbeOutput(nProbe, "LIMITER_ENERGY", "Limiter_Energy", "LIMITER", "Limiter value of the energy");
+  }
+
+}
+
+
 void CNEMOCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
   const auto* Node_Flow = solver[FLOW_SOL]->GetNodes();
@@ -366,6 +440,88 @@ void CNEMOCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolv
 
   if (config->GetTime_Domain()) {
     LoadTimeAveragedData(iPoint, Node_Flow);
+  }
+}
+
+void CNEMOCompOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    const auto* Node_Flow = solver[FLOW_SOL]->GetNodes();
+    auto* Node_Geo = geometry->nodes;
+    const auto nSpecies = config->GetnSpecies();
+    unsigned long iPoint{0};
+    LoadProbeData_Scalar(config, solver, geometry);
+    const su2double factor = solver[FLOW_SOL]->GetReferenceDynamicPressure();
+    
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      
+      LoadProbeCoordinates(Node_Geo->GetCoord(iPoint), index);
+
+      for(iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+        SetProbeOutputValue("DENSITY_" + std::to_string(iSpecies),   index, Node_Flow->GetSolution(iPoint, iSpecies));
+
+      SetProbeOutputValue("MOMENTUM-X", index, Node_Flow->GetSolution(iPoint, nSpecies));
+      SetProbeOutputValue("MOMENTUM-Y", index, Node_Flow->GetSolution(iPoint, nSpecies+1));
+      if (nDim == 3){
+        SetProbeOutputValue("MOMENTUM-Z", index, Node_Flow->GetSolution(iPoint, nSpecies+2));
+        SetProbeOutputValue("ENERGY",     index, Node_Flow->GetSolution(iPoint, nSpecies+3));
+        SetProbeOutputValue("ENERGY_VE",  index, Node_Flow->GetSolution(iPoint, nSpecies+4));
+      } else {
+        SetProbeOutputValue("ENERGY",     index, Node_Flow->GetSolution(iPoint, nSpecies+2));
+        SetProbeOutputValue("ENERGY_VE",  index, Node_Flow->GetSolution(iPoint, nSpecies+3));
+      }
+
+      for(iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+        SetProbeOutputValue("MASSFRAC_" + std::to_string(iSpecies),   index, Node_Flow->GetSolution(iPoint, iSpecies)/Node_Flow->GetDensity(iPoint));
+
+      if (gridMovement){
+        SetProbeOutputValue("GRID_VELOCITY-X", index, Node_Geo->GetGridVel(iPoint)[0]);
+        SetProbeOutputValue("GRID_VELOCITY-Y", index, Node_Geo->GetGridVel(iPoint)[1]);
+        if (nDim == 3)
+          SetProbeOutputValue("GRID_VELOCITY-Z", index, Node_Geo->GetGridVel(iPoint)[2]);
+      }
+
+      SetProbeOutputValue("PRESSURE", index, Node_Flow->GetPressure(iPoint));
+      SetProbeOutputValue("TEMPERATURE_TR", index, Node_Flow->GetTemperature(iPoint));
+      SetProbeOutputValue("TEMPERATURE_VE", index, Node_Flow->GetTemperature_ve(iPoint));
+      SetProbeOutputValue("MACH", index, sqrt(Node_Flow->GetVelocity2(iPoint))/Node_Flow->GetSoundSpeed(iPoint));
+
+      SetProbeOutputValue("PRESSURE_COEFF", index, (Node_Flow->GetPressure(iPoint) - solver[FLOW_SOL]->GetPressure_Inf())/factor);
+
+      if (config->GetViscous()){
+        SetProbeOutputValue("LAMINAR_VISCOSITY", index, Node_Flow->GetLaminarViscosity(iPoint));
+      }
+
+      for(iSpecies = 0; iSpecies < nSpecies; iSpecies++)
+        SetProbeOutputValue("RES_DENSITY_" + std::to_string(iSpecies), index, solver[FLOW_SOL]->LinSysRes(iPoint, iSpecies));
+
+      SetProbeOutputValue("RES_MOMENTUM-X", index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies));
+      SetProbeOutputValue("RES_MOMENTUM-Y", index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies+1));
+      if (nDim == 3){
+        SetProbeOutputValue("RES_MOMENTUM-Z", index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies+2));
+        SetProbeOutputValue("RES_ENERGY",     index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies+3));
+        SetProbeOutputValue("RES_ENERGY_VE",  index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies+4));
+      } else {
+        SetProbeOutputValue("RES_ENERGY", index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies+2));
+        SetProbeOutputValue("RES_ENERGY_VE", index, solver[FLOW_SOL]->LinSysRes(iPoint, nSpecies+3));
+      }
+
+      if (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE && config->GetKind_SlopeLimit_Flow() != LIMITER::VAN_ALBADA_EDGE) {
+        SetProbeOutputValue("LIMITER_DENSITY",    index, Node_Flow->GetLimiter_Primitive(iPoint, 0));
+        SetProbeOutputValue("LIMITER_MOMENTUM-X", index, Node_Flow->GetLimiter_Primitive(iPoint, 1));
+        SetProbeOutputValue("LIMITER_MOMENTUM-Y", index, Node_Flow->GetLimiter_Primitive(iPoint, 2));
+        if (nDim == 3){
+          SetProbeOutputValue("LIMITER_MOMENTUM-Z", index, Node_Flow->GetLimiter_Primitive(iPoint, 3));
+          SetProbeOutputValue("LIMITER_ENERGY",     index, Node_Flow->GetLimiter_Primitive(iPoint, 4));
+        } else {
+          SetProbeOutputValue("LIMITER_ENERGY", index, Node_Flow->GetLimiter_Primitive(iPoint, 3));
+        }
+      }
+
+    }
   }
 }
 

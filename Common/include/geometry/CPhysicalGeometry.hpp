@@ -589,6 +589,15 @@ public:
   void SetBoundSensitivity(CConfig *config) override;
 
   /*!
+   * \brief Look for the closest node to the specified probe.
+   * \param[in] config - Definition of the particular problem.
+   * \param[in] Probe_pointID - Point ID of the closest point to the probe.
+   * \param[in] Probe_rankID - Rank where the specified Probe is at.
+   * \param[in] Probe_dist - Distance between the probe and the closest point
+   */
+  void FindProbeLocation(CConfig *config) override;
+
+  /*!
    * \brief Compute the maximum thickness of an airfoil.
    * \return Maximum thickness at a particular seccion.
    */

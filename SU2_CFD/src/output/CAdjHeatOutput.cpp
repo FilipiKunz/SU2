@@ -178,6 +178,39 @@ void CAdjHeatOutput::SetVolumeOutputFields(CConfig *config){
 
 }
 
+void CAdjHeatOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+  // Grid coordinates
+  AddProbeOutput(nProbe, "COORD-X", "x", "COORDINATES", "x-component of the coordinate vector");
+  AddProbeOutput(nProbe, "COORD-Y", "y", "COORDINATES", "y-component of the coordinate vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "COORD-Z", "z", "COORDINATES", "z-component of the coordinate vector");
+
+
+  /// BEGIN_GROUP: CONSERVATIVE, DESCRIPTION: The conservative variables of the adjoint solver.
+  /// DESCRIPTION: Adjoint Pressure.
+  AddProbeOutput(nProbe, "ADJ_TEMPERATURE",    "Adjoint_Temperature",    "SOLUTION" ,"Adjoint Temperature");
+  /// END_GROUP
+
+
+  /// BEGIN_GROUP: RESIDUAL, DESCRIPTION: Residuals of the conservative variables.
+  /// DESCRIPTION: Residual of the adjoint Pressure.
+  AddProbeOutput(nProbe, "RES_ADJ_TEMPERATURE",    "Residual_Adjoint_Temperature",    "RESIDUAL", "Residual of the Adjoint Temperature");
+  /// END_GROUP
+
+  /// BEGIN_GROUP: SENSITIVITY, DESCRIPTION: Geometrical sensitivities of the current objective function.
+  /// DESCRIPTION: Sensitivity x-component.
+  AddProbeOutput(nProbe, "SENSITIVITY-X", "Sensitivity_x", "SENSITIVITY", "x-component of the sensitivity vector");
+  /// DESCRIPTION: Sensitivity y-component.
+  AddProbeOutput(nProbe, "SENSITIVITY-Y", "Sensitivity_y", "SENSITIVITY", "y-component of the sensitivity vector");
+  if (nDim == 3)
+    /// DESCRIPTION: Sensitivity z-component.
+    AddProbeOutput(nProbe, "SENSITIVITY-Z", "Sensitivity_z", "SENSITIVITY", "z-component of the sensitivity vector");
+  /// DESCRIPTION: Sensitivity in normal direction.
+  AddProbeOutput(nProbe, "SENSITIVITY", "Surface_Sensitivity", "SENSITIVITY", "sensitivity in normal direction");
+  /// END_GROUP
+
+}
+
 void CAdjHeatOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
   CVariable* Node_AdjHeat = solver[ADJHEAT_SOL]->GetNodes();
@@ -201,9 +234,44 @@ void CAdjHeatOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolve
 
 }
 
+void CAdjHeatOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    CVariable* Node_AdjHeat = solver[ADJHEAT_SOL]->GetNodes();
+    CPoint*    Node_Geo     = geometry->nodes;
+    unsigned long iPoint{0};
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      SetProbeOutputValue("COORD-X", index,  Node_Geo->GetCoord(iPoint, 0));
+      SetProbeOutputValue("COORD-Y", index,  Node_Geo->GetCoord(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("COORD-Z", index, Node_Geo->GetCoord(iPoint, 2));
+
+      SetProbeOutputValue("ADJ_TEMPERATURE", index, Node_AdjHeat->GetSolution(iPoint, 0));
+
+      // Residuals
+      SetProbeOutputValue("RES_ADJ_TEMPERATURE", index, Node_AdjHeat->GetSolution(iPoint, 0) - Node_AdjHeat->GetSolution_Old(iPoint, 0));
+
+      SetProbeOutputValue("SENSITIVITY-X", index, Node_AdjHeat->GetSensitivity(iPoint, 0));
+      SetProbeOutputValue("SENSITIVITY-Y", index, Node_AdjHeat->GetSensitivity(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("SENSITIVITY-Z", index, Node_AdjHeat->GetSensitivity(iPoint, 2));
+    }
+  }
+
+}
+
 void CAdjHeatOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint, unsigned short iMarker, unsigned long iVertex){
 
   SetVolumeOutputValue("SENSITIVITY", iPoint, solver[ADJHEAT_SOL]->GetCSensitivity(iMarker, iVertex));
 
 }
 
+void CAdjHeatOutput::LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned int index, unsigned short iMarker, unsigned long iVertex){
+
+  SetProbeOutputValue("SENSITIVITY", index, solver[ADJHEAT_SOL]->GetCSensitivity(iMarker, iVertex));
+
+}

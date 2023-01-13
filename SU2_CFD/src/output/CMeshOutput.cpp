@@ -63,6 +63,21 @@ void CMeshOutput::SetVolumeOutputFields(CConfig *config){
 
 }
 
+void CMeshOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+
+  // Grid coordinates
+  AddProbeOutput(nProbe, "COORD-X", "x", "COORDINATES", "x-component of the coordinate vector");
+  AddProbeOutput(nProbe, "COORD-Y", "y", "COORDINATES", "y-component of the coordinate vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "COORD-Z", "z", "COORDINATES", "z-component of the coordinate vector");
+
+  // Mesh quality metrics, computed in CPhysicalGeometry::ComputeMeshQualityStatistics.
+  AddProbeOutput(nProbe, "ORTHOGONALITY", "Orthogonality", "MESH_QUALITY", "Orthogonality Angle (deg.)");
+  AddProbeOutput(nProbe, "ASPECT_RATIO",  "Aspect_Ratio",  "MESH_QUALITY", "CV Face Area Aspect Ratio");
+  AddProbeOutput(nProbe, "VOLUME_RATIO",  "Volume_Ratio",  "MESH_QUALITY", "CV Sub-Volume Ratio");
+
+}
+
 void CMeshOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
   CPoint*    Node_Geo  = geometry->nodes;
@@ -79,4 +94,30 @@ void CMeshOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver *
     SetVolumeOutputValue("VOLUME_RATIO",  iPoint, geometry->Volume_Ratio[iPoint]);
   }
 
+}
+
+void CMeshOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    CPoint*    Node_Geo  = geometry->nodes;
+    unsigned long iPoint{0};
+    vector<unsigned long> Probe_pointID = geometry->GetProbe_pointID();
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+
+      SetProbeOutputValue("COORD-X", index,  Node_Geo->GetCoord(iPoint, 0));
+      SetProbeOutputValue("COORD-Y", index,  Node_Geo->GetCoord(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("COORD-Z", index, Node_Geo->GetCoord(iPoint, 2));
+
+      // Mesh quality metrics
+      if (config->GetWrt_MeshQuality()) {
+        SetProbeOutputValue("ORTHOGONALITY", index, geometry->Orthogonality[iPoint]);
+        SetProbeOutputValue("ASPECT_RATIO",  index, geometry->Aspect_Ratio[iPoint]);
+        SetProbeOutputValue("VOLUME_RATIO",  index, geometry->Volume_Ratio[iPoint]);
+      }
+    }
+  }
 }

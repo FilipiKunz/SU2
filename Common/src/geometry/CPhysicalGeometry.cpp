@@ -6875,6 +6875,139 @@ void CPhysicalGeometry::MatchActuator_Disk(const CConfig *config) {
 
 }
 
+void CPhysicalGeometry::FindProbeLocation(CConfig *config){
+
+  
+  unsigned short iDim;
+  unsigned long iPoint;
+  unsigned long unmatched = 0, iPoint_Found = 0, iPoint_Ext = 0;
+
+  const su2double *Coor_Probe;
+  unsigned int nProbe, iProbe, iRank;
+
+  //--- Get the number of probes and resize the input variables.
+
+  nProbe = config->GetnProbe();
+
+  int nProcessors = size;
+  int Probe_rankID[nProbe], Probe_rankID_all[nProbe*nProcessors];
+  unsigned long Probe_pointID[nProbe], Probe_pointID_all[nProbe*nProcessors];
+  su2double Probe_dist[nProbe], Probe_dist_all[nProbe*nProcessors];
+  for(iProbe=0; iProbe<nProbe; iProbe++)
+    Probe_dist[iProbe] = 1e6;
+  su2double Probe_location[nDim*nProbe], Probe_location_all[nDim*nProbe*nProcessors];
+  unsigned int probeID;
+  unsigned long pointID, nPointEval, nPointBatch = nPointDomain/size;
+  int rankID;
+  su2double dist;
+  Probe probe;
+  SU2_MPI::Status status;
+
+  if (rank == MASTER_NODE)
+    cout << "Finding the closest node for each probe."<< endl;
+
+  //--- Allocate the vectors to hold boundary node coordinates and its local ID.
+
+  vector<su2double>     Coords;
+  vector<unsigned long> PointIDs;
+  CADTPointsOnlyClass VertexADT;
+
+  for(unsigned long StartPoint=0; StartPoint<nPointDomain; StartPoint+=nPointBatch){
+
+    //--- Retrieve and store the coordinates of owned interior nodes and their local point IDs.
+
+    nPointEval = (StartPoint+nPointBatch>nPointDomain)? nPointDomain-StartPoint:nPointBatch;
+    Coords.clear(); PointIDs.clear();
+    Coords.resize(nDim*nPointEval);
+    PointIDs.resize(nPointEval);
+
+    for (iPoint = 0; iPoint < nPointEval; iPoint++) {
+
+      PointIDs[iPoint] = iPoint+StartPoint;
+      for (iDim = 0; iDim < nDim; iDim++)
+        Coords[iPoint*nDim + iDim] = nodes->GetCoord(iPoint+StartPoint, iDim);
+
+    }
+
+    //--- Build the ADT of all interior nodes.
+
+    VertexADT.BuildCADT(nDim, nPointEval, Coords.data(), PointIDs.data(), false);
+
+    //--- Loop over all interior mesh nodes owned by this rank and find the matching point with minimum distance. Once we have the match, store the sensitivities from the file for that node.
+    
+    if (VertexADT.IsEmpty()) {
+      SU2_MPI::Error("No external points given to ADT.", CURRENT_FUNCTION);
+    } else {
+
+      for(iProbe = 0; iProbe < nProbe; iProbe++){
+
+        //--- Get the coordinates for the i-th probe.
+
+        Coor_Probe = config->GetProbeLocation(iProbe);
+
+        //--- Locate the nearest node to this external point. If it is on our rank, then store the sensitivity value. 
+
+        VertexADT.DetermineNearestNode(Coor_Probe, dist, pointID, rankID);
+
+        if(dist<Probe_dist[iProbe]){
+          Probe_rankID[iProbe] = rankID;
+          Probe_pointID[iProbe] = pointID;
+          Probe_dist[iProbe] = dist;
+          for(iDim=0; iDim<nDim; iDim++)
+            Probe_location[iProbe*nDim+iDim] = nodes->GetCoord(pointID,iDim);
+        }
+      }
+    }
+  }
+
+  SU2_MPI::Allgather(&Probe_rankID, nProbe, MPI_INT, Probe_rankID_all, nProbe, MPI_INT, SU2_MPI::GetComm());
+  SU2_MPI::Allgather(&Probe_dist, nProbe, MPI_DOUBLE, Probe_dist_all, nProbe, MPI_DOUBLE, SU2_MPI::GetComm());
+  SU2_MPI::Allgather(&Probe_location, nProbe*nDim, MPI_DOUBLE, Probe_location_all, nProbe*nDim, MPI_DOUBLE, SU2_MPI::GetComm());
+  SU2_MPI::Allgather(&Probe_pointID, nProbe, MPI_UNSIGNED_LONG, Probe_pointID_all, nProbe, MPI_UNSIGNED_LONG, SU2_MPI::GetComm());
+
+  for(iRank=0; iRank<nProcessors; iRank++)
+    for(iProbe=0; iProbe<nProbe; iProbe++){
+      if(Probe_dist_all[iRank*nProbe+iProbe] < Probe_dist[iProbe]){
+        Probe_dist[iProbe] = Probe_dist_all[iRank*nProbe+iProbe];
+        Probe_rankID[iProbe] = Probe_rankID_all[iRank*nProbe+iProbe];
+        Probe_pointID[iProbe] = Probe_pointID_all[iRank*nProbe+iProbe];
+        for(iDim=0; iDim<nDim; iDim++)
+          Probe_location[iProbe*nDim+iDim] = Probe_location_all[iRank*nProbe*nDim+iProbe*nDim+iDim];
+      }
+    }
+
+    
+  for(iProbe=0; iProbe<nProbe; iProbe++){
+
+    probe.rankID = Probe_rankID[iProbe];
+    probe.pointID = Probe_pointID[iProbe];
+    probe.dist = Probe_dist[iProbe];
+    probe.probeID = iProbe;
+    for(iDim=0; iDim<nDim; iDim++)
+      probe.location.push_back(Probe_location[iProbe*nDim+iDim]);
+
+    unmatched += (Probe_dist[iProbe]>1e-6)? 1:0;
+
+    if(Probe_rankID[iProbe] == rank)
+      SetProbe_info(probe);
+
+    if(rank==MASTER_NODE)
+      SetProbe_master(probe);
+
+    probe.location.clear();
+  }
+  
+  SetProbe_pointID(vector<unsigned long> (Probe_pointID, Probe_pointID+sizeof(Probe_pointID)/sizeof(Probe_pointID[0])));
+
+  //--- Check for points with a poor match and report the count. 
+
+  if ((unmatched > 0) && (rank == MASTER_NODE)) {
+    cout << " Warning: there are Probe " << unmatched;
+    cout << " points with a match distance > 1e-6." << endl;
+  }
+
+};
+
 void CPhysicalGeometry::MatchPeriodic(const CConfig *config,
                                       unsigned short val_periodic) {
 

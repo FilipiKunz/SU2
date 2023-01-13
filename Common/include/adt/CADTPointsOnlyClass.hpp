@@ -59,6 +59,12 @@ public:
                       const bool     globalTree);
 
   /*!
+   * \brief Default constructor of the class.
+   */
+  CADTPointsOnlyClass();
+
+
+  /*!
    * \brief Function, which determines the nearest node in the ADT for the given coordinate.
    * \note This simply forwards the call to the implementation function selecting the right
    *       working variables for the current thread.
@@ -76,10 +82,11 @@ public:
                               coor, dist, pointID, rankID);
   }
 
-  /*!
-   * \brief Default constructor of the class, disabled.
-   */
-  CADTPointsOnlyClass() = delete;
+  void BuildCADT(unsigned short nDim,
+                 unsigned long  nPoints,
+                 const su2double *coor,
+                 const unsigned long *pointID,
+                 const bool     globalTree);
 
 private:
   /*!

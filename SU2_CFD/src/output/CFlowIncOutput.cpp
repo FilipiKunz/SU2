@@ -366,6 +366,76 @@ void CFlowIncOutput::SetVolumeOutputFields(CConfig *config){
   AddCommonFVMOutputs(config);
 }
 
+void CFlowIncOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+
+  // Grid coordinates
+  AddProbeCoordinates(nProbe);
+
+  // SOLUTION variables
+  AddProbeOutput(nProbe, "PRESSURE",   "Pressure",   "SOLUTION", "Pressure");
+  AddProbeOutput(nProbe, "VELOCITY-X", "Velocity_x", "SOLUTION", "x-component of the velocity vector");
+  AddProbeOutput(nProbe, "VELOCITY-Y", "Velocity_y", "SOLUTION", "y-component of the velocity vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "VELOCITY-Z", "Velocity_z", "SOLUTION", "z-component of the velocity vector");
+  if (heat || weakly_coupled_heat)
+    AddProbeOutput(nProbe, "TEMPERATURE",  "Temperature","SOLUTION", "Temperature");
+
+
+  // Radiation variables
+  if (config->AddRadiation())
+    AddProbeOutput(nProbe, "P1-RAD", "Radiative_Energy(P1)", "SOLUTION", "Radiative Energy");
+
+  // Primitive variables
+  AddProbeOutput(nProbe, "PRESSURE_COEFF", "Pressure_Coefficient", "PRIMITIVE", "Pressure coefficient");
+  AddProbeOutput(nProbe, "DENSITY",        "Density",              "PRIMITIVE", "Density");
+
+  if (config->GetKind_Solver() == MAIN_SOLVER::INC_RANS || config->GetKind_Solver() == MAIN_SOLVER::INC_NAVIER_STOKES){
+    AddProbeOutput(nProbe, "LAMINAR_VISCOSITY", "Laminar_Viscosity", "PRIMITIVE", "Laminar viscosity");
+
+    AddProbeOutput(nProbe, "SKIN_FRICTION-X", "Skin_Friction_Coefficient_x", "PRIMITIVE", "x-component of the skin friction vector");
+    AddProbeOutput(nProbe, "SKIN_FRICTION-Y", "Skin_Friction_Coefficient_y", "PRIMITIVE", "y-component of the skin friction vector");
+    if (nDim == 3)
+      AddProbeOutput(nProbe, "SKIN_FRICTION-Z", "Skin_Friction_Coefficient_z", "PRIMITIVE", "z-component of the skin friction vector");
+
+    AddProbeOutput(nProbe, "HEAT_FLUX", "Heat_Flux", "PRIMITIVE", "Heat-flux");
+    AddProbeOutput(nProbe, "Y_PLUS", "Y_Plus", "PRIMITIVE", "Non-dim. wall distance (Y-Plus)");
+
+  }
+
+  if (config->GetSAParsedOptions().bc) {
+    AddProbeOutput(nProbe, "INTERMITTENCY", "gamma_BC", "INTERMITTENCY", "Intermittency");
+  }
+
+  //Residuals
+  AddProbeOutput(nProbe, "RES_PRESSURE", "Residual_Pressure", "RESIDUAL", "Residual of the pressure");
+  AddProbeOutput(nProbe, "RES_VELOCITY-X", "Residual_Velocity_x", "RESIDUAL", "Residual of the x-velocity component");
+  AddProbeOutput(nProbe, "RES_VELOCITY-Y", "Residual_Velocity_y", "RESIDUAL", "Residual of the y-velocity component");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "RES_VELOCITY-Z", "Residual_Velocity_z", "RESIDUAL", "Residual of the z-velocity component");
+  if (config->GetEnergy_Equation())
+    AddProbeOutput(nProbe, "RES_TEMPERATURE", "Residual_Temperature", "RESIDUAL", "Residual of the temperature");
+
+
+  if (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE && config->GetKind_SlopeLimit_Flow() != LIMITER::VAN_ALBADA_EDGE) {
+    AddProbeOutput(nProbe, "LIMITER_PRESSURE", "Limiter_Pressure", "LIMITER", "Limiter value of the pressure");
+    AddProbeOutput(nProbe, "LIMITER_VELOCITY-X", "Limiter_Velocity_x", "LIMITER", "Limiter value of the x-velocity");
+    AddProbeOutput(nProbe, "LIMITER_VELOCITY-Y", "Limiter_Velocity_y", "LIMITER", "Limiter value of the y-velocity");
+    if (nDim == 3)
+      AddProbeOutput(nProbe, "LIMITER_VELOCITY-Z", "Limiter_Velocity_z", "LIMITER", "Limiter value of the z-velocity");
+    if (heat || weakly_coupled_heat)
+      AddProbeOutput(nProbe, "LIMITER_TEMPERATURE", "Limiter_Temperature", "LIMITER", "Limiter value of the temperature");
+  }
+
+
+  // Streamwise Periodicity
+  if(streamwisePeriodic) {
+    AddProbeOutput(nProbe, "RECOVERED_PRESSURE", "Recovered_Pressure", "SOLUTION", "Recovered physical pressure");
+    if (heat && streamwisePeriodic_temperature)
+      AddProbeOutput(nProbe, "RECOVERED_TEMPERATURE", "Recovered_Temperature", "SOLUTION", "Recovered physical temperature");
+  }
+
+}
+
 void CFlowIncOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
   const auto* Node_Flow = solver[FLOW_SOL]->GetNodes();
@@ -438,6 +508,86 @@ void CFlowIncOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolve
   }
 
   LoadCommonFVMOutputs(config, geometry, iPoint);
+}
+
+void CFlowIncOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    const auto* Node_Flow = solver[FLOW_SOL]->GetNodes();
+    const CVariable* Node_Heat = nullptr;
+    const CVariable* Node_Rad = nullptr;
+    auto* Node_Geo = geometry->nodes;
+    unsigned long iPoint{0};
+
+    if (weakly_coupled_heat){
+      Node_Heat = solver[HEAT_SOL]->GetNodes();
+    }
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      LoadProbeCoordinates(Node_Geo->GetCoord(iPoint), index);
+
+      SetProbeOutputValue("PRESSURE",   index, Node_Flow->GetSolution(iPoint, 0));
+      SetProbeOutputValue("VELOCITY-X", index, Node_Flow->GetSolution(iPoint, 1));
+      SetProbeOutputValue("VELOCITY-Y", index, Node_Flow->GetSolution(iPoint, 2));
+      if (nDim == 3)
+        SetProbeOutputValue("VELOCITY-Z", index, Node_Flow->GetSolution(iPoint, 3));
+
+      if (heat) SetProbeOutputValue("TEMPERATURE", index, Node_Flow->GetSolution(iPoint, nDim+1));
+      if (weakly_coupled_heat) SetProbeOutputValue("TEMPERATURE", index, Node_Heat->GetSolution(iPoint, 0));
+
+      // Radiation solver
+      if (config->AddRadiation()){
+        Node_Rad = solver[RAD_SOL]->GetNodes();
+        SetProbeOutputValue("P1-RAD", index, Node_Rad->GetSolution(iPoint,0));
+      }
+
+      if (gridMovement){
+        SetProbeOutputValue("GRID_VELOCITY-X", index, Node_Geo->GetGridVel(iPoint)[0]);
+        SetProbeOutputValue("GRID_VELOCITY-Y", index, Node_Geo->GetGridVel(iPoint)[1]);
+        if (nDim == 3)
+          SetProbeOutputValue("GRID_VELOCITY-Z", index, Node_Geo->GetGridVel(iPoint)[2]);
+      }
+
+      const su2double factor = solver[FLOW_SOL]->GetReferenceDynamicPressure();
+      SetProbeOutputValue("PRESSURE_COEFF", index, (Node_Flow->GetPressure(iPoint) - solver[FLOW_SOL]->GetPressure_Inf())/factor);
+      SetProbeOutputValue("DENSITY", index, Node_Flow->GetDensity(iPoint));
+
+      if (config->GetKind_Solver() == MAIN_SOLVER::INC_RANS || config->GetKind_Solver() == MAIN_SOLVER::INC_NAVIER_STOKES){
+        SetProbeOutputValue("LAMINAR_VISCOSITY", index, Node_Flow->GetLaminarViscosity(iPoint));
+      }
+
+      SetProbeOutputValue("RES_PRESSURE", index, solver[FLOW_SOL]->LinSysRes(iPoint, 0));
+      SetProbeOutputValue("RES_VELOCITY-X", index, solver[FLOW_SOL]->LinSysRes(iPoint, 1));
+      SetProbeOutputValue("RES_VELOCITY-Y", index, solver[FLOW_SOL]->LinSysRes(iPoint, 2));
+      if (nDim == 3)
+        SetProbeOutputValue("RES_VELOCITY-Z", index, solver[FLOW_SOL]->LinSysRes(iPoint, 3));
+      if (config->GetEnergy_Equation())
+        SetProbeOutputValue("RES_TEMPERATURE", index, solver[FLOW_SOL]->LinSysRes(iPoint, nDim+1));
+
+      if (config->GetKind_SlopeLimit_Flow() != LIMITER::NONE && config->GetKind_SlopeLimit_Flow() != LIMITER::VAN_ALBADA_EDGE) {
+        SetProbeOutputValue("LIMITER_PRESSURE", index, Node_Flow->GetLimiter_Primitive(iPoint, 0));
+        SetProbeOutputValue("LIMITER_VELOCITY-X", index, Node_Flow->GetLimiter_Primitive(iPoint, 1));
+        SetProbeOutputValue("LIMITER_VELOCITY-Y", index, Node_Flow->GetLimiter_Primitive(iPoint, 2));
+        if (nDim == 3)
+          SetProbeOutputValue("LIMITER_VELOCITY-Z", index, Node_Flow->GetLimiter_Primitive(iPoint, 3));
+        if (heat || weakly_coupled_heat)
+          SetProbeOutputValue("LIMITER_TEMPERATURE", index, Node_Flow->GetLimiter_Primitive(iPoint, nDim+1));
+      }
+
+      // All turbulence and species outputs.
+      LoadProbeData_Scalar(config, solver, geometry);
+
+      // Streamwise Periodicity
+      if(streamwisePeriodic) {
+        SetProbeOutputValue("RECOVERED_PRESSURE", index, Node_Flow->GetStreamwise_Periodic_RecoveredPressure(iPoint));
+        if (heat && streamwisePeriodic_temperature)
+          SetProbeOutputValue("RECOVERED_TEMPERATURE", index, Node_Flow->GetStreamwise_Periodic_RecoveredTemperature(iPoint));
+      }
+
+    }
+  }
 }
 
 bool CFlowIncOutput::SetInit_Residuals(const CConfig *config){

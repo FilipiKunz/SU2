@@ -836,6 +836,16 @@ void CDriver::Geometrical_Preprocessing_FVM(CConfig *config, CGeometry **&geomet
   if ((config->GetnMGLevels() != 0) && (rank == MASTER_NODE))
     cout << "Setting the multigrid structure." << endl;
 
+  /* Find and store the closest node to each specified probe*/
+  unsigned int nProbe = config->GetnProbe();
+  if (nProbe>0){
+    geometry[MESH_0]->FindProbeLocation(config);
+    if(rank==MASTER_NODE)
+      writeProbeInfo(geometry[MESH_0]);
+  }
+
+  Probe_Preprocessing(config, output_container, geometry[MESH_0]);
+
   /*--- Loop over all the new grid ---*/
 
   for (iMGlevel = 1; iMGlevel <= config->GetnMGLevels(); iMGlevel++) {
@@ -929,6 +939,45 @@ void CDriver::Geometrical_Preprocessing_FVM(CConfig *config, CGeometry **&geomet
   }
 
 }
+
+void CDriver::writeProbeInfo(CGeometry * geometry){
+
+  probeInfo.open("probe_information.dat", ios::out);
+
+  auto probe_list = geometry->GetProbe_master();
+  PrintingToolbox::CTablePrinter* probeInfoTable = new PrintingToolbox::CTablePrinter(&probeInfo, "");
+
+  vector<string> fieldName;
+  if(nDim==3){
+    fieldName = {"Probe number", "x-coord", "y-coord", "z-coord", "pointID", "dist", "rankID"};
+  }else{
+    fieldName = {"Probe number", "x-coord", "y-coord", "pointID", "dist", "rankID"};
+  }
+  
+  for(unsigned int i=0; i<fieldName.size(); i++){
+
+    int width = std::max((int) (fieldName.at(i)).size()+2, 18);
+    probeInfoTable->AddColumn("\"" + fieldName.at(i) + "\"", width);
+
+  }
+
+  probeInfoTable->PrintHeader();
+  probeInfo.flush();
+
+  if(probe_list.size()>0){
+    for(unsigned int index=0; index<probe_list.size(); index++){
+        *probeInfoTable << probe_list[index].probeID << probe_list[index].location[0] << probe_list[index].location[1];
+        if(nDim==3)
+          *probeInfoTable << probe_list[index].location[2];
+        *probeInfoTable << probe_list[index].pointID << probe_list[index].dist << probe_list[index].rankID;
+        probeInfo.flush();
+    }
+  }
+
+  probeInfo.close();
+}
+
+
 
 void CDriver::Geometrical_Preprocessing_DGFEM(CConfig* config, CGeometry **&geometry) {
 
@@ -2704,6 +2753,11 @@ void CDriver::Output_Preprocessing(CConfig **config, CConfig *driver_config, COu
 
 }
 
+void CDriver::Probe_Preprocessing(CConfig *config, COutput **&output,  CGeometry *geometry){
+
+  output[iZone]->PreprocessProbeOutput(config,geometry);
+
+}
 
 void CDriver::Turbomachinery_Preprocessing(CConfig** config, CGeometry**** geometry, CSolver***** solver,
                                            CInterface*** interface){

@@ -227,6 +227,52 @@ void CElasticityOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSo
   }
 }
 
+void CElasticityOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    CVariable* Node_Struc = solver[FEA_SOL]->GetNodes();
+    CPoint*    Node_Geo  = geometry->nodes;
+    unsigned long iPoint{0};
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      SetVolumeOutputValue("COORD-X", index,  Node_Geo->GetCoord(iPoint, 0));
+      SetVolumeOutputValue("COORD-Y", index,  Node_Geo->GetCoord(iPoint, 1));
+      if (nDim == 3)
+        SetVolumeOutputValue("COORD-Z", index, Node_Geo->GetCoord(iPoint, 2));
+
+      SetVolumeOutputValue("DISPLACEMENT-X", index, Node_Struc->GetSolution(iPoint, 0));
+      SetVolumeOutputValue("DISPLACEMENT-Y", index, Node_Struc->GetSolution(iPoint, 1));
+      if (nDim == 3) SetVolumeOutputValue("DISPLACEMENT-Z", index, Node_Struc->GetSolution(iPoint, 2));
+
+      if(dynamic){
+        SetVolumeOutputValue("VELOCITY-X", index, Node_Struc->GetSolution_Vel(iPoint, 0));
+        SetVolumeOutputValue("VELOCITY-Y", index, Node_Struc->GetSolution_Vel(iPoint, 1));
+        if (nDim == 3) SetVolumeOutputValue("VELOCITY-Z", index, Node_Struc->GetSolution_Vel(iPoint, 2));
+
+        SetVolumeOutputValue("ACCELERATION-X", index, Node_Struc->GetSolution_Accel(iPoint, 0));
+        SetVolumeOutputValue("ACCELERATION-Y", index, Node_Struc->GetSolution_Accel(iPoint, 1));
+        if (nDim == 3) SetVolumeOutputValue("ACCELERATION-Z", iPoint, Node_Struc->GetSolution_Accel(iPoint, 2));
+      }
+
+      SetVolumeOutputValue("STRESS-XX", index, Node_Struc->GetStress_FEM(iPoint)[0]);
+      SetVolumeOutputValue("STRESS-YY", index, Node_Struc->GetStress_FEM(iPoint)[1]);
+      SetVolumeOutputValue("STRESS-XY", index, Node_Struc->GetStress_FEM(iPoint)[2]);
+      if (nDim == 3){
+        SetVolumeOutputValue("STRESS-ZZ", index, Node_Struc->GetStress_FEM(iPoint)[3]);
+        SetVolumeOutputValue("STRESS-XZ", index, Node_Struc->GetStress_FEM(iPoint)[4]);
+        SetVolumeOutputValue("STRESS-YZ", index, Node_Struc->GetStress_FEM(iPoint)[5]);
+      }
+      SetVolumeOutputValue("VON_MISES_STRESS", index, Node_Struc->GetVonMises_Stress(iPoint));
+
+      if (config->GetTopology_Optimization()) {
+        SetVolumeOutputValue("TOPOL_DENSITY", index, Node_Struc->GetAuxVar(iPoint));
+      }
+    }
+  }
+}
+
 void CElasticityOutput::SetVolumeOutputFields(CConfig *config){
 
   // Grid coordinates

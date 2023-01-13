@@ -173,6 +173,7 @@ private:
   Total_UnstTimeND;               /*!< \brief Total time for unsteady computations (non dimensional). */
   su2double Current_UnstTime,     /*!< \brief Global time of the unsteady simulation. */
   Current_UnstTimeND;             /*!< \brief Global time of the unsteady simulation. */
+  unsigned short nProbe;          /*!< \brief Number of probes. */
   unsigned short nMarker_Euler,   /*!< \brief Number of Euler wall markers. */
   nMarker_FarField,               /*!< \brief Number of far-field markers. */
   nMarker_Custom,                 /*!< \brief Number of custom markers. */
@@ -391,6 +392,7 @@ private:
   su2double **Periodic_RotCenter;            /*!< \brief Rotational center for each periodic boundary. */
   su2double **Periodic_RotAngles;            /*!< \brief Rotation angles for each periodic boundary. */
   su2double **Periodic_Translation;          /*!< \brief Translation vector for each periodic boundary. */
+  su2double **Probe_Location;                /*!< \brief Coordinates of the probe */
   string *Marker_CfgFile_TagBound;           /*!< \brief Global index for markers using config file. */
   unsigned short *Marker_All_KindBC,         /*!< \brief Global index for boundaries using grid information. */
   *Marker_CfgFile_KindBC;                    /*!< \brief Global index for boundaries using config file. */
@@ -791,6 +793,7 @@ private:
   Solution_AdjFileName,          /*!< \brief Adjoint solution input file for drag functional. */
   Volume_FileName,               /*!< \brief Flow variables output file. */
   Conv_FileName,                 /*!< \brief Convergence history output file. */
+  Probe_FolderName,              /*!< \brief Probe output folder. */
   Breakdown_FileName,            /*!< \brief Breakdown output file. */
   Restart_FileName,              /*!< \brief Restart file for flow variables. */
   Restart_AdjFileName,           /*!< \brief Restart file for adjoint variables, drag functional. */
@@ -1153,9 +1156,11 @@ private:
   bool SpecialOutput,             /*!< \brief Determines if the special output is written. */
   Wrt_ForcesBreakdown;            /*!< \brief Determines if the forces breakdown file is written. */
   string *ScreenOutput,           /*!< \brief Kind of the screen output. */
-  *HistoryOutput, *VolumeOutput;  /*!< \brief Kind of the output printed to the history file. */
+  *HistoryOutput, *VolumeOutput,  /*!< \brief Kind of the output printed to the history file. */
+  *ProbeOutput;                   /*!< \brief Kind of the output printed to the history file. */
   unsigned short nScreenOutput,   /*!< \brief Number of screen output variables (max: 6). */
-  nHistoryOutput, nVolumeOutput;  /*!< \brief Number of variables printed to the history file. */
+  nHistoryOutput, nVolumeOutput,  /*!< \brief Number of variables printed to the history file. */
+  nProbeOutput;                   /*!< \brief Number of variables printed to the history file. */
   bool Multizone_Residual;        /*!< \brief Determines if memory should be allocated for the multizone residual. */
   SST_ParsedOptions sstParsedOptions; /*!< \brief Additional parameters for the SST turbulence model. */
   SA_ParsedOptions saParsedOptions;   /*!< \brief Additional parameters for the SA turbulence model. */
@@ -1332,6 +1337,8 @@ private:
   void addPeriodicOption(const string & name, unsigned short & nMarker_PerBound,
                          string* & Marker_PerBound, string* & Marker_PerDonor,
                          su2double** & RotCenter, su2double** & RotAngles, su2double** & Translation);
+
+  void addProbeOption(const string & name, unsigned short & nProbe, su2double** & Probe_Location);
 
   void addTurboPerfOption(const string & name, unsigned short & nMarker_TurboPerf,
                           string* & Marker_TurboBoundIn, string* & Marker_TurboBoundOut);
@@ -2970,6 +2977,12 @@ public:
    * \return Total number of boundary markers.
    */
   unsigned short GetnMarker_ActDiskInlet(void) const { return nMarker_ActDiskInlet; }
+
+  /*!
+   * \brief Get the total number of probes.
+   * \return Total number of probes.
+   */
+  unsigned short GetnProbe(void) const { return nProbe; }
 
   /*!
    * \brief Get the total number of boundary markers.
@@ -5457,6 +5470,12 @@ public:
   string GetConv_FileName(void) const { return Conv_FileName; }
 
   /*!
+   * \brief Get the name of the folder where the probe information will be stored.
+   * \return Name of the folder where the probe info will be stored.
+   */
+  string GetProbe_FolderName(void) const { return Probe_FolderName; }
+
+  /*!
    * \brief Get the Starting Iteration for the windowing approach
    *        in Sensitivity Analysis for period-averaged outputs, which oscillate.
    * \return
@@ -6473,6 +6492,13 @@ public:
    * \return The translation vector.
    */
   const su2double* GetPeriodic_Translation(unsigned short val_index ) const { return Periodic_Translation[val_index]; }
+
+  /*!
+   * \brief Get the location vector for a probe.
+   * \param[in] val_index - Index corresponding to the probe location.
+   * \return The location vector.
+   */
+  const su2double* GetProbeLocation(unsigned short val_index ) const { return Probe_Location[val_index]; }
 
   /*!
    * \brief Get the rotationally periodic donor marker for boundary <i>val_marker</i>.
@@ -9403,9 +9429,19 @@ public:
   unsigned short GetnHistoryOutput(void) const { return nHistoryOutput; }
 
   /*!
+   * \brief Get the number of history output variables requested
+   */
+  unsigned short GetnProbeOutput(void) const { return nProbeOutput; }
+
+  /*!
    * \brief Get the history output field iField
    */
   string GetHistoryOutput_Field(unsigned short iField) const { return HistoryOutput[iField]; }
+
+  /*!
+   * \brief Get the history output field iField
+   */
+  string GetProbeOutput_Field(unsigned short iField) const { return ProbeOutput[iField]; }
 
   /*!
    * \brief Get the number of history output variables requested

@@ -135,6 +135,27 @@ protected:
 
   vector<su2double> XCoordList;              /*!< \brief Vector containing points appearing on a single plane */
 
+
+  /*--- Probe vectors. ---*/
+
+  /*
+  vector<unsigned long> Probe_pointID;
+  vector<int> Probe_rankID;
+  vector<su2double> Probe_dist;
+  vector<vector<su2double>> Probe_location;
+  */
+
+  struct Probe{
+    unsigned int probeID;
+    unsigned long pointID;
+    int rankID;
+    su2double dist;
+    vector<su2double> location;
+  };
+
+  vector<Probe> probe_list, master_list;
+  vector<unsigned long> Probe_pointID;
+
 #if defined(HAVE_MPI) && defined(HAVE_PARMETIS)
   vector<vector<unsigned long> > adj_nodes; /*!< \brief Vector of vectors holding each node's adjacency during preparation for ParMETIS. */
   vector<idx_t> adjacency; /*!< \brief Local adjacency array to be input into ParMETIS for partitioning (idx_t is a ParMETIS type defined in their headers). */
@@ -351,6 +372,37 @@ public:
    */
   void PostPeriodicSends(CGeometry *geometry, const CConfig *config, unsigned short commType,
                          unsigned short countPerPeriodicPoint, int val_iMessage) const;
+
+  /*! 
+   * \brief Get the probe's information vector
+   * \param[in] iProbe - probe index
+   * \param[out] probe_list[iProbe] - Probe info at the ith probe index.
+   */
+  vector<Probe> GetProbe_list(){return probe_list;};
+
+  /*! 
+   * \brief Get the probe's information vector
+   * \param[in] iProbe - probe index
+   * \param[out] probe_list[iProbe] - Probe info at the ith probe index.
+   */
+  vector<Probe> GetProbe_master(){return master_list;};
+
+  /*! 
+   * \brief Get the probe's rankID vector
+   * \param[in] Probe information of the probe 
+   */
+  void SetProbe_info(Probe probe){probe_list.push_back(probe);};
+
+  /*! 
+   * \brief Get the probe's rankID vector
+   * \param[in] Probe information of the probe 
+   */
+  void SetProbe_master(Probe probe){master_list.push_back(probe);};
+
+
+  void SetProbe_pointID(vector <unsigned long> pointID){Probe_pointID = pointID;};
+  
+  vector<unsigned long> GetProbe_pointID(){return Probe_pointID;};
 
   /*!
    * \brief Helper function to define the type and number of variables per point for each communication type.
@@ -865,6 +917,12 @@ public:
    * \param[in] config - Definition of the particular problem.
    */
   inline virtual void SetBoundSensitivity(CConfig *config) {}
+
+  /*!
+   * \brief A virtual member.
+   * \param[in] config - Definition of the particular problem.
+   */
+  inline virtual void FindProbeLocation(CConfig *config) {}
 
   /*!
    * \brief Set the data containers for customized boundary conditions.

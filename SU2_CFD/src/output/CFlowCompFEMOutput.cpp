@@ -227,6 +227,82 @@ void CFlowCompFEMOutput::LoadVolumeDataFEM(CConfig *config, CGeometry *geometry,
   }
 }
 
+void CFlowCompFEMOutput::LoadProbeDataFEM(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iElem, unsigned short dof){
+
+  auto probe_list = geometry->GetProbe_list();
+
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    unsigned short iDim;
+
+    unsigned short nVar = solver[FLOW_SOL]->GetnVar();
+
+    /*--- Create an object of the class CMeshFEM_DG and retrieve the necessary
+    geometrical information for the FEM DG solver. ---*/
+
+    CMeshFEM_DG *DGGeometry = dynamic_cast<CMeshFEM_DG *>(geometry);
+
+    CVolumeElementFEM *volElem  = DGGeometry->GetVolElem();
+
+    /*--- Get a pointer to the fluid model class from the DG-FEM solver
+    so that we can access the states below. ---*/
+
+    CFluidModel *DGFluidModel = solver[FLOW_SOL]->GetFluidModel();
+
+    /* Set the pointers for the solution for this element. */
+
+    const unsigned long offset = nVar*volElem[iElem].offsetDOFsSolLocal;
+    su2double *solDOFs         = solver[FLOW_SOL]->GetVecSolDOFs() + offset;
+
+    /*--- Get the conservative variables for this particular DOF. ---*/
+
+    const su2double *U = solDOFs+dof*nVar;
+
+    /*--- Load the coordinate values of the solution DOFs. ---*/
+
+    const su2double *coor = volElem[iElem].coorSolDOFs.data() + dof*nDim;
+
+    /*--- Prepare the primitive states. ---*/
+
+    const su2double DensityInv = 1.0/U[0];
+    su2double vel[3], Velocity2 = 0.0;
+    for(iDim=0; iDim<nDim; ++iDim) {
+      vel[iDim] = U[iDim+1]*DensityInv;
+      Velocity2 += vel[iDim]*vel[iDim];
+    }
+    su2double StaticEnergy = U[nDim+1]*DensityInv - 0.5*Velocity2;
+    DGFluidModel->SetTDState_rhoe(U[0], StaticEnergy);
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      SetProbeOutputValue("COORD-X",        index, coor[0]);
+      SetProbeOutputValue("COORD-Y",        index, coor[1]);
+      if (nDim == 3)
+        SetProbeOutputValue("COORD-Z",      index, coor[2]);
+      SetProbeOutputValue("DENSITY",        index, U[0]);
+      SetProbeOutputValue("MOMENTUM-X",     index, U[1]);
+      SetProbeOutputValue("MOMENTUM-Y",     index, U[2]);
+      if (nDim == 3){
+        SetProbeOutputValue("MOMENTUM-Z",   index,  U[3]);
+        SetProbeOutputValue("ENERGY",       index,  U[4]);
+      } else {
+        SetProbeOutputValue("ENERGY",       index,  U[3]);
+      }
+
+      SetProbeOutputValue("PRESSURE",       index, DGFluidModel->GetPressure());
+      SetProbeOutputValue("TEMPERATURE",    index, DGFluidModel->GetTemperature());
+      SetProbeOutputValue("MACH",           index, sqrt(Velocity2)/DGFluidModel->GetSoundSpeed());
+      SetProbeOutputValue("PRESSURE_COEFF", index, DGFluidModel->GetCp());
+
+      if (config->GetKind_Solver() == MAIN_SOLVER::FEM_NAVIER_STOKES){
+        SetProbeOutputValue("LAMINAR_VISCOSITY", index, DGFluidModel->GetLaminarViscosity());
+      }
+      if ((config->GetKind_Solver()  == MAIN_SOLVER::FEM_LES) && (config->GetKind_SGS_Model() != TURB_SGS_MODEL::IMPLICIT_LES)){
+        // todo: Export Eddy instead of Laminar viscosity
+        SetProbeOutputValue("EDDY_VISCOSITY", index, DGFluidModel->GetLaminarViscosity());
+      }
+    }
+  }
+}
+
 void CFlowCompFEMOutput::LoadHistoryData(CConfig *config, CGeometry *geometry, CSolver **solver) {
 
   CSolver* flow_solver = solver[FLOW_SOL];

@@ -40,6 +40,15 @@ void CFVMOutput::AddCoordinates() {
     AddVolumeOutput("COORD-Z", "z", "COORDINATES", "z-component of the coordinate vector");
 }
 
+void CFVMOutput::AddProbeCoordinates(unsigned int nProbe) {
+
+  // Grid coordinates
+  AddProbeOutput(nProbe, "COORD-X", "x", "COORDINATES", "x-component of the coordinate vector");
+  AddProbeOutput(nProbe, "COORD-Y", "y", "COORDINATES", "y-component of the coordinate vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "COORD-Z", "z", "COORDINATES", "z-component of the coordinate vector");
+}
+
 
 void CFVMOutput::AddCommonFVMOutputs(const CConfig *config) {
 

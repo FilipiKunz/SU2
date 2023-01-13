@@ -1601,6 +1601,72 @@ public:
   }
 };
 
+class COptionProbe : public COptionBase {
+  string name; // identifier for the option
+  unsigned short& size;
+  su2double**& probe_location;
+
+public:
+  COptionProbe(const string option_field_name, unsigned short& nProbe, su2double**& Location)
+    : name(option_field_name),
+      size(nProbe),
+      probe_location(Location) {
+    size = 0;
+    COptionProbe::SetDefault();
+  }
+
+  ~COptionProbe() {
+    for (unsigned short i = 0; i < size; ++i) {
+      delete[] probe_location[i];
+    }
+    delete[] probe_location;
+    COptionProbe::SetDefault();
+  }
+
+  string SetValue(const vector<string>& option_value) override {
+    COptionBase::SetValue(option_value);
+    const int mod_num = 3;
+
+    const unsigned short totalVals = option_value.size();
+    if ((totalVals == 1) && (option_value[0].compare("NONE") == 0)) {
+      return "";
+    }
+    if (totalVals % mod_num != 0) {
+      return name + ": must have a number of entries divisible by 3";
+    }
+
+    const unsigned short nVals = (totalVals / mod_num);
+    size = nVals;
+    probe_location = new su2double*[nVals];
+    for (unsigned short i = 0; i < nVals; i++) {
+      probe_location[i] = new su2double[3];
+    }
+
+    bool err = false;
+
+    auto getval = [&](unsigned short i, unsigned short j) {
+      istringstream ss(option_value[mod_num*i + j]);
+      su2double val;
+      if (!(ss >> val)) err = true;
+      return val;
+    };
+
+    for (unsigned short i = 0; i < nVals; i++) {
+      probe_location[i][0] = getval(i, 0);
+      probe_location[i][1] = getval(i, 1);
+      probe_location[i][2] = getval(i, 2);
+
+      if (err) return badValue("probe", name);
+    }
+
+    return "";
+  }
+
+  void SetDefault() override {
+    probe_location = nullptr;
+  }
+};
+
 class COptionTurboPerformance : public COptionBase {
   string name; // identifier for the option
   unsigned short & size;

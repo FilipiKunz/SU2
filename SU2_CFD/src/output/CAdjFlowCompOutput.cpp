@@ -274,6 +274,60 @@ void CAdjFlowCompOutput::SetVolumeOutputFields(CConfig *config){
 
 }
 
+void CAdjFlowCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
+
+  // Grid coordinates
+  AddProbeOutput(nProbe, "COORD-X", "x", "COORDINATES", "x-component of the coordinate vector");
+  AddProbeOutput(nProbe, "COORD-Y", "y", "COORDINATES", "y-component of the coordinate vector");
+  if (nDim == 3)
+    AddProbeOutput(nProbe, "COORD-Z", "z", "COORDINATES", "z-component of the coordinate vector");
+
+  /// BEGIN_GROUP: SOLUTION, DESCRIPTION: The SOLUTION variables of the adjoint solver.
+  /// DESCRIPTION: Adjoint density.
+  AddProbeOutput(nProbe, "ADJ_DENSITY",    "Adjoint_Density",    "SOLUTION", "Adjoint density");
+  /// DESCRIPTION: Adjoint momentum x-component.
+  AddProbeOutput(nProbe, "ADJ_MOMENTUM-X", "Adjoint_Momentum_x", "SOLUTION", "x-component of the adjoint momentum vector");
+  /// DESCRIPTION: Adjoint momentum y-component.
+  AddProbeOutput(nProbe, "ADJ_MOMENTUM-Y", "Adjoint_Momentum_y", "SOLUTION", "y-component of the adjoint momentum vector");
+  if (nDim == 3)
+    /// DESCRIPTION: Adjoint momentum z-component.
+    AddProbeOutput(nProbe, "ADJ_MOMENTUM-Z", "Adjoint_Momentum_z", "SOLUTION", "z-component of the adjoint momentum vector");
+  /// DESCRIPTION: Adjoint energy.
+  AddProbeOutput(nProbe, "ADJ_ENERGY", "Adjoint_Energy", "SOLUTION", "Adjoint energy");
+
+  SetProbeOutputFields_AdjScalarSolution(config, nProbe);
+  /// END_GROUP
+
+  /// BEGIN_GROUP: RESIDUAL, DESCRIPTION: Residuals of the SOLUTION variables.
+  /// DESCRIPTION: Residual of the adjoint density.
+  AddProbeOutput(nProbe, "RES_ADJ_DENSITY",    "Residual_Adjoint_Density",    "RESIDUAL", "Residual of the adjoint density");
+  /// DESCRIPTION: Residual of the adjoint momentum x-component.
+  AddProbeOutput(nProbe, "RES_ADJ_MOMENTUM-X", "Residual_Adjoint_Momentum_x", "RESIDUAL", "Residual of the adjoint x-momentum");
+  /// DESCRIPTION: Residual of the adjoint momentum y-component.
+  AddProbeOutput(nProbe, "RES_ADJ_MOMENTUM-Y", "Residual_Adjoint_Momentum_y", "RESIDUAL", "Residual of the adjoint y-momentum");
+  if (nDim == 3)
+    /// DESCRIPTION: Residual of the adjoint momentum z-component.
+    AddProbeOutput(nProbe, "RES_ADJ_MOMENTUM-Z", "Residual_Adjoint_Momentum_z", "RESIDUAL", "Residual of the adjoint z-momentum");
+  /// DESCRIPTION: Residual of the adjoint energy.
+  AddProbeOutput(nProbe, "RES_ADJ_ENERGY", "Residual_Adjoint_Energy", "RESIDUAL", "Residual of the adjoint energy");
+
+  SetProbeOutputFields_AdjScalarResidual(config, nProbe);
+  /// END_GROUP
+
+  /// BEGIN_GROUP: SENSITIVITY, DESCRIPTION: Geometrical sensitivities of the current objective function.
+  /// DESCRIPTION: Sensitivity x-component.
+  AddProbeOutput(nProbe, "SENSITIVITY-X", "Sensitivity_x", "SENSITIVITY", "x-component of the sensitivity vector");
+  /// DESCRIPTION: Sensitivity y-component.
+  AddProbeOutput(nProbe, "SENSITIVITY-Y", "Sensitivity_y", "SENSITIVITY", "y-component of the sensitivity vector");
+  if (nDim == 3)
+    /// DESCRIPTION: Sensitivity z-component.
+    AddProbeOutput(nProbe, "SENSITIVITY-Z", "Sensitivity_z", "SENSITIVITY", "z-component of the sensitivity vector");
+  /// DESCRIPTION: Sensitivity in normal direction.
+  AddProbeOutput(nProbe, "SENSITIVITY", "Surface_Sensitivity", "SENSITIVITY", "sensitivity in normal direction");
+  /// END_GROUP
+
+}
+
 void CAdjFlowCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
   CVariable* Node_AdjFlow = solver[ADJFLOW_SOL]->GetNodes();
@@ -313,12 +367,61 @@ void CAdjFlowCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CS
   LoadVolumeData_AdjScalar(config, solver, iPoint);
 }
 
+void CAdjFlowCompOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolver **solver){
+
+  auto probe_list = geometry->GetProbe_list();
+  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+    CVariable* Node_AdjFlow = solver[ADJFLOW_SOL]->GetNodes();
+    CPoint*    Node_Geo     = geometry->nodes;
+    unsigned long iPoint{0};
+
+    for(unsigned int index=0; index<probe_list.size(); index++){
+      iPoint = probe_list[index].pointID;
+      SetProbeOutputValue("COORD-X", index,  Node_Geo->GetCoord(iPoint, 0));
+      SetProbeOutputValue("COORD-Y", index,  Node_Geo->GetCoord(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("COORD-Z", index, Node_Geo->GetCoord(iPoint, 2));
+
+      SetProbeOutputValue("ADJ_DENSITY",    index, Node_AdjFlow->GetSolution(iPoint, 0));
+      SetProbeOutputValue("ADJ_MOMENTUM-X", index, Node_AdjFlow->GetSolution(iPoint, 1));
+      SetProbeOutputValue("ADJ_MOMENTUM-Y", index, Node_AdjFlow->GetSolution(iPoint, 2));
+      if (nDim == 3){
+        SetProbeOutputValue("ADJ_MOMENTUM-Z", index, Node_AdjFlow->GetSolution(iPoint, 3));
+        SetProbeOutputValue("ADJ_ENERGY",     index, Node_AdjFlow->GetSolution(iPoint, 4));
+      } else {
+        SetProbeOutputValue("ADJ_ENERGY",     index, Node_AdjFlow->GetSolution(iPoint, 3));
+      }
+
+      // Residuals
+      SetProbeOutputValue("RES_ADJ_DENSITY",    index, Node_AdjFlow->GetSolution(iPoint, 0) - Node_AdjFlow->GetSolution_Old(iPoint, 0));
+      SetProbeOutputValue("RES_ADJ_MOMENTUM-X", index, Node_AdjFlow->GetSolution(iPoint, 1) - Node_AdjFlow->GetSolution_Old(iPoint, 1));
+      SetProbeOutputValue("RES_ADJ_MOMENTUM-Y", index, Node_AdjFlow->GetSolution(iPoint, 2) - Node_AdjFlow->GetSolution_Old(iPoint, 2));
+      if (nDim == 3){
+        SetProbeOutputValue("RES_ADJ_MOMENTUM-Z", index, Node_AdjFlow->GetSolution(iPoint, 3) - Node_AdjFlow->GetSolution_Old(iPoint, 3));
+        SetProbeOutputValue("RES_ADJ_ENERGY",     index, Node_AdjFlow->GetSolution(iPoint, 4) - Node_AdjFlow->GetSolution_Old(iPoint, 4));
+      } else {
+        SetProbeOutputValue("RES_ADJ_ENERGY", index, Node_AdjFlow->GetSolution(iPoint, 3) - Node_AdjFlow->GetSolution_Old(iPoint, 3));
+      }
+
+      SetProbeOutputValue("SENSITIVITY-X", index, Node_AdjFlow->GetSensitivity(iPoint, 0));
+      SetProbeOutputValue("SENSITIVITY-Y", index, Node_AdjFlow->GetSensitivity(iPoint, 1));
+      if (nDim == 3)
+        SetProbeOutputValue("SENSITIVITY-Z", index, Node_AdjFlow->GetSensitivity(iPoint, 2));
+    }
+  }
+}
+
 void CAdjFlowCompOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint, unsigned short iMarker, unsigned long iVertex){
 
   SetVolumeOutputValue("SENSITIVITY", iPoint, solver[ADJFLOW_SOL]->GetCSensitivity(iMarker, iVertex));
 
 }
 
+void CAdjFlowCompOutput::LoadProbeSurfaceData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned int index, unsigned short iMarker, unsigned long iVertex){
+
+    SetProbeOutputValue("SENSITIVITY", index, solver[ADJFLOW_SOL]->GetCSensitivity(iMarker, iVertex));
+
+}
 
 bool CAdjFlowCompOutput::SetInit_Residuals(const CConfig *config){
 
