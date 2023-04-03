@@ -393,6 +393,7 @@ private:
   su2double **Periodic_RotAngles;            /*!< \brief Rotation angles for each periodic boundary. */
   su2double **Periodic_Translation;          /*!< \brief Translation vector for each periodic boundary. */
   su2double **Probe_Location;                /*!< \brief Coordinates of the probe */
+  string Probe_Location_dat;                 /*!< \brief Coordinates of the probe stored in a CSV file */
   string *Marker_CfgFile_TagBound;           /*!< \brief Global index for markers using config file. */
   unsigned short *Marker_All_KindBC,         /*!< \brief Global index for boundaries using grid information. */
   *Marker_CfgFile_KindBC;                    /*!< \brief Global index for boundaries using config file. */
@@ -5432,6 +5433,12 @@ public:
   string GetSolution_FileName(void) const { return Solution_FileName; }
 
   /*!
+   * \brief Get the name of the file with the probe coordinates list.
+   * \return Name of the file with the solution of the flow problem.
+   */
+  string GetProbe_Location_dat(void) const { return Probe_Location_dat; }
+
+  /*!
    * \brief Get the name of the file with the solution of the adjoint flow problem
    *          with drag objective function.
    * \return Name of the file with the solution of the adjoint flow problem with
@@ -5469,11 +5476,27 @@ public:
    */
   string GetConv_FileName(void) const { return Conv_FileName; }
 
+  bool is_last_char_slash(string s) {
+      if (s.empty()) { // check if the string is empty
+          return false;
+      }
+      return (s.back() == '/'); // check if the last character is '/'
+  }
+
   /*!
    * \brief Get the name of the folder where the probe information will be stored.
    * \return Name of the folder where the probe info will be stored.
    */
-  string GetProbe_FolderName(void) const { return Probe_FolderName; }
+  string GetProbe_FolderName(void) const { 
+    if(Probe_FolderName.empty()){
+      return Probe_FolderName;
+    }
+    if(Probe_FolderName.back() == '/'){
+      return Probe_FolderName;
+    }else{
+      return Probe_FolderName+"/";
+    }
+  }
 
   /*!
    * \brief Get the Starting Iteration for the windowing approach
@@ -6498,7 +6521,71 @@ public:
    * \param[in] val_index - Index corresponding to the probe location.
    * \return The location vector.
    */
-  const su2double* GetProbeLocation(unsigned short val_index ) const { return Probe_Location[val_index]; }
+  const su2double* GetProbe_Location(unsigned short val_index ) const { return Probe_Location[val_index]; }
+
+  /*!
+   * \brief Read the probe location .dat file.
+   */
+  void ReadProbe_dat(void){
+
+    if(!(GetProbe_Location_dat()).empty()){
+
+      // Remove any probe location that was set directly on the .cfg file.
+      for (int i = 0; i < nProbe; i++) {
+          delete[] Probe_Location[i];
+      }
+
+      ifstream file(GetProbe_Location_dat());
+
+      if (!file) {
+          cerr << "Error: Unable to open the specified probe .dat file" << endl;
+      }
+
+      nProbe = 0;
+      string line;
+      su2double x, y, z;
+
+      while (getline(file, line)) {
+          if (line.find_first_not_of("0123456789.-") == string::npos) {
+              continue; // skip lines with only one number
+          }
+          istringstream iss(line);
+          if (!(iss >> x >> y >> z)) {
+              break; // error
+          }
+          nProbe++;
+      }
+
+      // Reset the file pointer to the beginning of the file
+      file.clear();
+      file.seekg(0, ios::beg);
+
+      // Allocate memory for the Probe_Location array of pointers
+      Probe_Location = new su2double *[nProbe];
+      for (unsigned short i = 0; i < nProbe; i++) {
+        Probe_Location[i] = new su2double[3];
+      }
+
+      int probe_count = 0;
+      while (getline(file, line)) {
+
+          if (line.find_first_not_of("0123456789.-") == string::npos) {
+              continue; // skip lines with only one number
+          }
+
+          istringstream iss(line);
+          if (!(iss >> x >> y >> z)) {
+              break; // error
+          }
+      
+          Probe_Location[probe_count][0] = x;
+          Probe_Location[probe_count][1] = y;
+          Probe_Location[probe_count][2] = z;
+          probe_count++;
+      }
+      file.close(); // close the file
+    }
+  };
 
   /*!
    * \brief Get the rotationally periodic donor marker for boundary <i>val_marker</i>.

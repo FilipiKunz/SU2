@@ -139,6 +139,12 @@ protected:
   void SetVolumeOutputFields_ScalarLimiter(const CConfig* config);
 
   /*!
+   * \brief Add scalar (turbulence/species) probe limiter fields (and more) for a point (FVMComp, FVMInc, FVMNEMO).
+   * \param[in] config - Definition of the particular problem.
+   */
+  void SetProbeOutputFields_ScalarLimiter(const CConfig* config);
+
+  /*!
    * \brief Set all scalar (turbulence/species) volume field values for a point.
    * \param[in] config - Definition of the particular problem.
    * \param[in] solver - The container holding all solution data.

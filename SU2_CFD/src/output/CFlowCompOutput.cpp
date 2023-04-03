@@ -335,6 +335,8 @@ void CFlowCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe)
     AddProbeOutput(nProbe, "LIMITER_ENTHALPY", "Limiter_Enthalpy", "LIMITER", "Limiter value of the enthalpy");
   }
 
+  SetProbeOutputFields_ScalarLimiter(config);
+
   // Roe Low Dissipation
   if (config->GetKind_RoeLowDiss() != NO_ROELOWDISS) {
     AddProbeOutput(nProbe, "ROE_DISSIPATION", "Roe_Dissipation", "ROE_DISSIPATION", "Value of the Roe dissipation");

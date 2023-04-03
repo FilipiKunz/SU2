@@ -208,34 +208,33 @@ void COutput::SetHistory_Output(CGeometry *geometry,
   curOuterIter = OuterIter;
   curInnerIter = InnerIter;
 
-  /* Print out probe files */
+  /* Load the probe info */
+  if (WriteHistoryFile_Output(config)){
+    auto probe_list = geometry->GetProbe_list();
+    if(probe_list.size()>0 && probe_list[0].rankID==rank){
+      LoadCommonProbeData(config, geometry);
+      LoadProbeData(config, geometry, solver_container);
+      unsigned short iMarker = 0;
+      unsigned long iVertex = 0;
+      unsigned long nVertex = geometry->GetnVertex(iMarker);
+      unsigned long iPoint = 0;
 
-  LoadCommonProbeData(config, geometry);
-  LoadProbeData(config, geometry, solver_container);
+      for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+        for(unsigned int index=0; index<probe_list.size(); index++){
+          
+          iPoint = probe_list[index].pointID;
 
-  auto probe_list = geometry->GetProbe_list();
-  if(probe_list.size()>0 && probe_list[0].rankID==rank){
+        /*--- We only want to have surface values on solid walls ---*/
 
-    unsigned short iMarker = 0;
-    unsigned long iVertex = 0;
-    unsigned long nVertex = geometry->GetnVertex(iMarker);
-    unsigned long iPoint = 0;
+          if (config->GetSolid_Wall(iMarker)){
 
-    for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
-      for(unsigned int index=0; index<probe_list.size(); index++){
-        
-        iPoint = probe_list[index].pointID;
+            iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
 
-      /*--- We only want to have surface values on solid walls ---*/
+            /*--- Load the surface data into the data sorter. --- */
+            if(iVertex < nVertex)
+              LoadProbeSurfaceData(config, geometry, solver_container, index, iMarker, iVertex);
 
-        if (config->GetSolid_Wall(iMarker)){
-
-          iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
-
-          /*--- Load the surface data into the data sorter. --- */
-          if(iVertex < nVertex)
-            LoadProbeSurfaceData(config, geometry, solver_container, index, iMarker, iVertex);
-
+          }
         }
       }
     }
@@ -261,35 +260,34 @@ void COutput::SetHistory_Output(CGeometry *geometry,
                                 CSolver **solver_container,
                                 CConfig *config) {
 
-  /* Print out probe files */
-
-  LoadCommonProbeData(config, geometry);
-  LoadProbeData(config, geometry, solver_container);
-  
-  auto probe_list = geometry->GetProbe_list();
-  if(probe_list.size()>0 && probe_list[0].rankID==rank){
-
-    unsigned short iMarker = 0;
-    unsigned long iVertex = 0;
-    unsigned long nVertex = geometry->GetnVertex(iMarker);
-    unsigned long iPoint = 0;
+  /* Load the probe info */
+  if (WriteHistoryFile_Output(config)){
     auto probe_list = geometry->GetProbe_list();
+    if(probe_list.size()>0 && probe_list[0].rankID==rank){
+      LoadCommonProbeData(config, geometry);
+      LoadProbeData(config, geometry, solver_container);
+      unsigned short iMarker = 0;
+      unsigned long iVertex = 0;
+      unsigned long nVertex = geometry->GetnVertex(iMarker);
+      unsigned long iPoint = 0;
+      auto probe_list = geometry->GetProbe_list();
 
-    for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
-      for(unsigned int index=0; index<probe_list.size(); index++){
-        
-        iPoint = probe_list[index].pointID;
+      for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+        for(unsigned int index=0; index<probe_list.size(); index++){
+          
+          iPoint = probe_list[index].pointID;
 
-      /*--- We only want to have surface values on solid walls ---*/
+        /*--- We only want to have surface values on solid walls ---*/
 
-        if (config->GetSolid_Wall(iMarker)){
+          if (config->GetSolid_Wall(iMarker)){
 
-          iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
+            iVertex = geometry->nodes->GetVertex(iPoint, iMarker);
 
-          /*--- Load the surface data into the data sorter. --- */
-          if(iVertex < nVertex)
-            LoadProbeSurfaceData(config, geometry, solver_container, index, iMarker, iVertex);
+            /*--- Load the surface data into the data sorter. --- */
+            if(iVertex < nVertex)
+              LoadProbeSurfaceData(config, geometry, solver_container, index, iMarker, iVertex);
 
+          }
         }
       }
     }

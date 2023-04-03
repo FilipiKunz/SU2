@@ -1155,6 +1155,56 @@ void CFlowOutput::SetVolumeOutputFields_ScalarLimiter(const CConfig* config) {
   }
 }
 
+void CFlowOutput::SetProbeOutputFields_ScalarLimiter(const CConfig* config) {
+  if (config->GetKind_SlopeLimit_Turb() != LIMITER::NONE) {
+    switch (TurbModelFamily(config->GetKind_Turb_Model())) {
+      case TURB_FAMILY::SA:
+        AddProbeOutput(nProbe, "LIMITER_NU_TILDE", "Limiter_Nu_Tilde", "LIMITER", "Limiter value of the Spalart-Allmaras variable");
+        break;
+
+      case TURB_FAMILY::KW:
+        AddProbeOutput(nProbe, "LIMITER_TKE", "Limiter_TKE", "LIMITER", "Limiter value of turb. kinetic energy");
+        AddProbeOutput(nProbe, "LIMITER_DISSIPATION", "Limiter_Omega", "LIMITER", "Limiter value of dissipation rate");
+        break;
+
+      case TURB_FAMILY::NONE:
+        break;
+    }
+  }
+
+  if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
+    if (config->GetKind_SlopeLimit_Species() != LIMITER::NONE) {
+      for (unsigned short iVar = 0; iVar < config->GetnSpecies(); iVar++)
+        AddProbeOutput(nProbe, "LIMITER_SPECIES_" + std::to_string(iVar), "Limiter_Species_" + std::to_string(iVar), "LIMITER", "Limiter value of the transported species " + std::to_string(iVar));
+    }
+  }
+
+  if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) {
+    AddProbeOutput(nProbe, "EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
+  }
+
+  if (config->GetSAParsedOptions().bc) {
+    AddProbeOutput(nProbe, "INTERMITTENCY", "gamma_BC", "INTERMITTENCY", "Intermittency");
+  }
+
+  // Hybrid RANS-LES
+  if (config->GetKind_HybridRANSLES() != NO_HYBRIDRANSLES) {
+    AddProbeOutput(nProbe, "DES_LENGTHSCALE", "DES_LengthScale", "DDES", "DES length scale value");
+  }
+  AddProbeOutput(nProbe, "WALL_DISTANCE", "Wall_Distance", "DDES", "Wall distance value");
+
+  if (config->GetViscous()) {
+    if (nDim == 3) {
+      AddProbeOutput(nProbe, "VORTICITY_X", "Vorticity_x", "VORTEX_IDENTIFICATION", "x-component of the vorticity vector");
+      AddProbeOutput(nProbe, "VORTICITY_Y", "Vorticity_y", "VORTEX_IDENTIFICATION", "y-component of the vorticity vector");
+      AddProbeOutput(nProbe, "VORTICITY_Z", "Vorticity_z", "VORTEX_IDENTIFICATION", "z-component of the vorticity vector");
+    } else {
+      AddProbeOutput(nProbe, "VORTICITY", "Vorticity", "VORTEX_IDENTIFICATION", "Value of the vorticity");
+    }
+    AddProbeOutput(nProbe, "Q_CRITERION", "Q_Criterion", "VORTEX_IDENTIFICATION", "Value of the Q-Criterion");
+  }
+}
+
 void CFlowOutput::LoadVolumeData_Scalar(const CConfig* config, const CSolver* const* solver, const CGeometry* geometry,
                                         const unsigned long iPoint) {
   const auto* turb_solver = solver[TURB_SOL];
@@ -1316,8 +1366,8 @@ void CFlowOutput::LoadProbeData_Scalar(const CConfig* config, const CSolver* con
 
       if (config->GetKind_HybridRANSLES() != NO_HYBRIDRANSLES) {
         SetProbeOutputValue("DES_LENGTHSCALE", index, Node_Flow->GetDES_LengthScale(iPoint));
-        SetProbeOutputValue("WALL_DISTANCE", index, Node_Geo->GetWall_Distance(iPoint));
       }
+      SetProbeOutputValue("WALL_DISTANCE", index, Node_Geo->GetWall_Distance(iPoint));
 
       if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
         const auto Node_Species = solver[SPECIES_SOL]->GetNodes();

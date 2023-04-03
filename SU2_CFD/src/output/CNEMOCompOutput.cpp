@@ -361,6 +361,8 @@ void CNEMOCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe)
     AddProbeOutput(nProbe, "LIMITER_ENERGY", "Limiter_Energy", "LIMITER", "Limiter value of the energy");
   }
 
+  SetVolumeOutputFields_ScalarLimiter(config);
+
 }
 
 

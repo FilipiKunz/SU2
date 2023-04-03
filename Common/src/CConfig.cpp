@@ -251,6 +251,7 @@ CConfig::CConfig(char case_filename[MAX_STRING_SIZE], CConfig *config) {
     if (all_options.find("TIME_ITER") == all_options.end())
       config->SetnTime_Iter(nTimeIter);
   }
+
 }
 
 SU2_MPI::Comm CConfig::GetMPICommunicator() const {
@@ -2104,8 +2105,10 @@ void CConfig::SetConfig_Options() {
   addStringOption("RESTART_ADJ_FILENAME", Restart_AdjFileName, string("restart_adj.dat"));
   /*!\brief VOLUME_FLOW_FILENAME  \n DESCRIPTION: Output file flow (w/o extension) variables \ingroup Config */
   addStringOption("VOLUME_FILENAME", Volume_FileName, string("vol_solution"));
-  /*!\brief CONV_FILENAME \n DESCRIPTION: Output file convergence history (w/o extension) \n DEFAULT: history \ingroup Config*/
+  /*!\brief CONV_FILENAME \n DESCRIPTION: Output file convergence history (w/o extension) \n DEFAULT: none \ingroup Config*/
   addStringOption("PROBE_FOLDERNAME", Probe_FolderName, string(""));
+  /*!\brief probe csv filename \n DESCRIPTION: This option allows you to give to your problem a csv file containing the probe coordinates (with extension) \n DEFAULT: none \ingroup Config */
+  addStringOption("PROBE_LOCATION_DAT", Probe_Location_dat, string(""));
   /*!\brief VOLUME_ADJ_FILENAME
    *  \n DESCRIPTION: Output file adjoint (w/o extension) variables  \ingroup Config*/
   addStringOption("VOLUME_ADJ_FILENAME", Adj_FileName, string("adj_vol_solution"));

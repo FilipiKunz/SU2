@@ -176,6 +176,7 @@ CDriver::CDriver(char* confFile, unsigned short val_nZone, SU2_Comm MPICommunica
       Geometrical_Preprocessing(config_container[iZone], geometry_container[iZone][iInst], dry_run);
 
     }
+
   }
 
   /*--- Before we proceed with the zone loop we have to compute the wall distances.
@@ -593,6 +594,12 @@ void CDriver::Input_Preprocessing(CConfig **&config, CConfig *&driver_config) {
     /*--- Set the MPI communicator ---*/
 
     config[iZone]->SetMPICommunicator(SU2_MPI::GetComm());
+
+
+    /*--- Read the probe .dat file if present ---*/
+
+    config[iZone]->ReadProbe_dat();
+    
   }
 
 
@@ -837,8 +844,7 @@ void CDriver::Geometrical_Preprocessing_FVM(CConfig *config, CGeometry **&geomet
     cout << "Setting the multigrid structure." << endl;
 
   /* Find and store the closest node to each specified probe*/
-  unsigned int nProbe = config->GetnProbe();
-  if (nProbe>0){
+  if (config->GetnProbe()>0 || !(config->GetProbe_Location_dat()).empty()){
     geometry[MESH_0]->FindProbeLocation(config);
     if(rank==MASTER_NODE)
       writeProbeInfo(geometry[MESH_0]);

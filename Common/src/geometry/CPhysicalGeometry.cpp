@@ -6943,7 +6943,7 @@ void CPhysicalGeometry::FindProbeLocation(CConfig *config){
 
         //--- Get the coordinates for the i-th probe.
 
-        Coor_Probe = config->GetProbeLocation(iProbe);
+        Coor_Probe = config->GetProbe_Location(iProbe);
 
         //--- Locate the nearest node to this external point. If it is on our rank, then store the sensitivity value. 
 

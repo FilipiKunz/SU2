@@ -426,6 +426,7 @@ void CFlowIncOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
       AddProbeOutput(nProbe, "LIMITER_TEMPERATURE", "Limiter_Temperature", "LIMITER", "Limiter value of the temperature");
   }
 
+  SetProbeOutputFields_ScalarLimiter(config);
 
   // Streamwise Periodicity
   if(streamwisePeriodic) {
