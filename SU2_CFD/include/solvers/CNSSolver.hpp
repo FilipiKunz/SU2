@@ -42,7 +42,10 @@ private:
   vector<su2double> Buffet_Metric;          /*!< \brief Integrated separation sensor for each boundary. */
   vector<vector<su2double> > Buffet_Sensor; /*!< \brief Separation sensor for each boundary and vertex. */
   su2double Total_Buffet_Metric = 0.0;      /*!< \brief Integrated separation sensor for all the boundaries. */
+  CSGSModel *SGSModel;     /*!< \brief LES Subgrid Scale model. */
+  bool SGSModelUsed;       /*!< \brief Whether or not an LES Subgrid Scale model is used. */
 
+  CWallModel *WallModel;   /*!< \brief Choice of the Wall Model LES. */
   /*!
    * \brief A virtual member.
    * \param[in] geometry - Geometrical definition.
@@ -251,4 +254,13 @@ public:
   inline su2double GetBuffetSensor(unsigned short val_marker, unsigned long val_vertex) const override {
     return Buffet_Sensor[val_marker][val_vertex];
   }
+  /*!
+   * \brief Computes eddy viscosity (SGS model) for LES problems.
+   * \param[in] geometry - Geometrical definition of the problem.
+   * \param[in] solver_container - Container vector with all the solutions.
+   * \param[in] config - Definition of the particular problem.
+   */
+  void Setmut_LES(CGeometry *geometry,
+                     CSolver** solver_container,
+                     CConfig* config) override;
 };

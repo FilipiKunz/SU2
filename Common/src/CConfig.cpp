@@ -3514,7 +3514,13 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
           SU2_MPI::Error(string("Wall model STANDARD_FUNCTION and WALL_ROUGHNESS migh not be compatible. Checking required!\n"), CURRENT_FUNCTION);
       }
 
+  /* Check for the correct use of SGS Models */
+
+  if ((Kind_Turb_Model != TURB_MODEL::NONE) && (Kind_SGS_Model != TURB_SGS_MODEL::NONE) && !Time_Domain){
+    if (Kind_Solver!=MAIN_SOLVER::NAVIER_STOKES)
+      SU2_MPI::Error("SGS models are only available in the NAVIER STOKES solver.", CURRENT_FUNCTION);
     }
+  }
   }
 
   /*--- Initialize the AoA and Sideslip variables for the incompressible
@@ -6060,6 +6066,14 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
       case MAIN_SOLVER::FEM_NAVIER_STOKES: case MAIN_SOLVER::DISC_ADJ_FEM_NS:
         if (Kind_Regime == ENUM_REGIME::COMPRESSIBLE) cout << "Compressible Laminar Navier-Stokes' equations." << endl;
         if (Kind_Regime == ENUM_REGIME::INCOMPRESSIBLE) cout << "Incompressible Laminar Navier-Stokes' equations." << endl;
+        cout << "Subgrid Scale model: ";
+        switch (Kind_SGS_Model) {
+          case TURB_SGS_MODEL::NONE:         cout << "No SGS Model" << endl; break;
+          case TURB_SGS_MODEL::IMPLICIT_LES: cout << "Implicit LES" << endl; break;
+          case TURB_SGS_MODEL::SMAGORINSKY:  cout << "Smagorinsky " << endl; break;
+          case TURB_SGS_MODEL::WALE:         cout << "WALE"         << endl; break;
+          case TURB_SGS_MODEL::VREMAN:       cout << "VREMAN"       << endl; break;
+        }
         break;
       case MAIN_SOLVER::RANS:     case MAIN_SOLVER::DISC_ADJ_RANS:
       case MAIN_SOLVER::INC_RANS: case MAIN_SOLVER::DISC_ADJ_INC_RANS:

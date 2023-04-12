@@ -55,6 +55,38 @@ CNSSolver::CNSSolver(CGeometry *geometry, CConfig *config, unsigned short iMesh)
   Prandtl_Turb    = config->GetPrandtl_Turb();
   Tke_Inf         = config->GetTke_FreeStreamND();
 
+
+  /*--- Set the SGS model in case an LES simulation is carried out.
+   Make a distinction between the SGS models used and set SGSModel and
+  SGSModelUsed accordingly. ---*/
+
+  SGSModel = nullptr;
+  SGSModelUsed = false;
+
+  switch( config->GetKind_SGS_Model() ) {
+    /* No LES, so no SGS model needed.
+     Set the pointer to NULL and the boolean to false. */
+    case TURB_SGS_MODEL::NONE: case TURB_SGS_MODEL::IMPLICIT_LES:
+      SGSModel = nullptr;
+      SGSModelUsed = false;
+      break;
+    case TURB_SGS_MODEL::SMAGORINSKY:
+      SGSModel     = new CSmagorinskyModel;
+      SGSModelUsed = true;
+      break;
+    case TURB_SGS_MODEL::WALE:
+      SGSModel     = new CWALEModel;
+      SGSModelUsed = true;
+      break;
+    case TURB_SGS_MODEL::VREMAN:
+      SGSModel     = new CVremanModel;
+      SGSModelUsed = true;
+      break;
+    default:
+      SU2_MPI::Error("Unknown SGS model encountered", CURRENT_FUNCTION);
+  }
+
+
   /*--- Initialize the seed values for forward mode differentiation. ---*/
 
   switch(config->GetDirectDiff()) {
@@ -119,6 +151,13 @@ void CNSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_container, C
   ComputeVorticityAndStrainMag(*config, geometry, iMesh);
 
   /*--- Compute the TauWall from the wall functions ---*/
+  /*--- Calculate the eddy viscosity using a SGS model ---*/
+
+  if (SGSModelUsed){
+    SU2_OMP_MASTER
+    Setmut_LES(geometry, solver_container, config);
+    SU2_OMP_BARRIER
+  }
 
   if (wall_functions) {
     SetTau_Wall_WF(geometry, solver_container, config);
@@ -1053,5 +1092,51 @@ void CNSSolver::SetTau_Wall_WF(CGeometry *geometry, CSolver **solver_container, 
     }
     END_SU2_OMP_SAFE_GLOBAL_ACCESS
   }
+
+}
+
+void CNSSolver::Setmut_LES(CGeometry *geometry, CSolver **solver_container, CConfig *config) {
+
+  unsigned long iPoint;
+  su2double Grad_Vel[3][3] = {{0.0,0.0,0.0},{0.0,0.0,0.0},{0.0,0.0,0.0}};
+  su2double lenScale, muTurb, rho;
+
+  for (iPoint = 0; iPoint < nPoint; iPoint++){
+
+    /* Get Density */
+    rho = nodes->GetSolution(iPoint, 0);
+
+    /* Velocity Gradients */
+    for (unsigned short iDim = 0; iDim < nDim; iDim++)
+      for (unsigned short jDim = 0 ; jDim < nDim; jDim++)
+        Grad_Vel[iDim][jDim] = nodes->GetGradient_Primitive(iPoint, iDim+1, jDim);
+
+    /* Distance to the wall. */
+    su2double dist = geometry->nodes->GetWall_Distance(iPoint); // Is the distance to the wall used in any SGS calculation?
+
+    /* Length Scale for the SGS model: Cubic root of the volume. */
+    su2double Vol = geometry->nodes->GetVolume(iPoint) + geometry->nodes->GetPeriodicVolume(iPoint);
+    lenScale = pow(Vol,1./3.);
+
+    /* Compute the eddy viscosity. */
+    if (nDim == 2){
+      muTurb = SGSModel->ComputeEddyViscosity_2D(rho, Grad_Vel[0][0], Grad_Vel[1][0],
+                                                 Grad_Vel[0][1], Grad_Vel[1][1],
+                                                 lenScale, dist);
+    }
+    else{
+      muTurb = SGSModel->ComputeEddyViscosity_3D(rho, Grad_Vel[0][0], Grad_Vel[1][0], Grad_Vel[2][0],
+                                               Grad_Vel[0][1], Grad_Vel[1][1], Grad_Vel[2][1],
+                                               Grad_Vel[0][2], Grad_Vel[1][2], Grad_Vel[2][2],
+                                               lenScale, dist);
+    }
+    /* Set eddy viscosity. */
+    nodes->SetEddyViscosity(iPoint, muTurb);
+  }
+
+  /*--- MPI parallelization ---*/
+
+//  InitiateComms(geometry, config, SGS_MODEL);
+//  CompleteComms(geometry, config, SGS_MODEL);
 
 }

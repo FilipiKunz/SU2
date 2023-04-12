@@ -248,6 +248,21 @@ void CFlowCompOutput::SetVolumeOutputFields(CConfig *config){
 
     AddVolumeOutput("HEAT_FLUX", "Heat_Flux", "PRIMITIVE", "Heat-flux");
     AddVolumeOutput("Y_PLUS", "Y_Plus", "PRIMITIVE", "Non-dim. wall distance (Y-Plus)");
+
+  }
+
+  if (config->GetKind_Solver() == MAIN_SOLVER::NAVIER_STOKES){
+    switch (config->GetKind_SGS_Model()) {
+      case TURB_SGS_MODEL::VREMAN: case TURB_SGS_MODEL::WALE: case TURB_SGS_MODEL::SMAGORINSKY:
+        AddVolumeOutput("EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
+        break;
+      case TURB_SGS_MODEL::NONE: case TURB_SGS_MODEL::IMPLICIT_LES:
+        break;
+    }
+  }
+
+  if (config->GetKind_Solver() == MAIN_SOLVER::RANS) {
+    AddVolumeOutput("EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
   }
 
   //Residuals
@@ -314,6 +329,21 @@ void CFlowCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe)
 
     AddProbeOutput(nProbe, "HEAT_FLUX", "Heat_Flux", "PRIMITIVE", "Heat-flux");
     AddProbeOutput(nProbe, "Y_PLUS", "Y_Plus", "PRIMITIVE", "Non-dim. wall distance (Y-Plus)");
+  }
+
+
+  if (config->GetKind_Solver() == MAIN_SOLVER::NAVIER_STOKES){
+    switch (config->GetKind_SGS_Model()) {
+      case TURB_SGS_MODEL::VREMAN: case TURB_SGS_MODEL::WALE: case TURB_SGS_MODEL::SMAGORINSKY:
+        AddProbeOutput(nProbe, "EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
+        break;
+      case TURB_SGS_MODEL::NONE: case TURB_SGS_MODEL::IMPLICIT_LES:
+        break;
+    }
+  }
+
+  if (config->GetKind_Solver() == MAIN_SOLVER::RANS) {
+    AddProbeOutput(nProbe, "EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
   }
 
   //Residuals
