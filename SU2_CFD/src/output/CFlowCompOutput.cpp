@@ -409,6 +409,20 @@ void CFlowCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolv
     SetVolumeOutputValue("LAMINAR_VISCOSITY", iPoint, Node_Flow->GetLaminarViscosity(iPoint));
   }
 
+  if (config->GetKind_Solver() == MAIN_SOLVER::NAVIER_STOKES){
+    switch (config->GetKind_SGS_Model()) {
+      case TURB_SGS_MODEL::VREMAN: case TURB_SGS_MODEL::WALE: case TURB_SGS_MODEL::SMAGORINSKY:
+        SetVolumeOutputValue("EDDY_VISCOSITY", iPoint, Node_Flow->GetEddyViscosity(iPoint));
+        break;
+      case TURB_SGS_MODEL::NONE: case TURB_SGS_MODEL::IMPLICIT_LES:
+        break;
+    }
+  }
+
+  if (config->GetKind_Solver() == MAIN_SOLVER::RANS) {
+    SetVolumeOutputValue("EDDY_VISCOSITY", iPoint, Node_Flow->GetEddyViscosity(iPoint));
+  }
+
   SetVolumeOutputValue("RES_DENSITY", iPoint, solver[FLOW_SOL]->LinSysRes(iPoint, 0));
   SetVolumeOutputValue("RES_MOMENTUM-X", iPoint, solver[FLOW_SOL]->LinSysRes(iPoint, 1));
   SetVolumeOutputValue("RES_MOMENTUM-Y", iPoint, solver[FLOW_SOL]->LinSysRes(iPoint, 2));
@@ -482,6 +496,20 @@ void CFlowCompOutput::LoadProbeData(CConfig *config, CGeometry *geometry, CSolve
 
       if (config->GetKind_Solver() == MAIN_SOLVER::RANS || config->GetKind_Solver() == MAIN_SOLVER::NAVIER_STOKES){
         SetProbeOutputValue("LAMINAR_VISCOSITY", index, Node_Flow->GetLaminarViscosity(iPoint));
+      }
+
+      if (config->GetKind_Solver() == MAIN_SOLVER::NAVIER_STOKES){
+        switch (config->GetKind_SGS_Model()) {
+          case TURB_SGS_MODEL::VREMAN: case TURB_SGS_MODEL::WALE: case TURB_SGS_MODEL::SMAGORINSKY:
+            SetProbeOutputValue("EDDY_VISCOSITY", index, Node_Flow->GetEddyViscosity(iPoint));
+            break;
+          case TURB_SGS_MODEL::NONE: case TURB_SGS_MODEL::IMPLICIT_LES:
+            break;
+        }
+      }
+
+      if (config->GetKind_Solver() == MAIN_SOLVER::RANS) {
+        SetProbeOutputValue("EDDY_VISCOSITY", index, Node_Flow->GetEddyViscosity(iPoint));
       }
 
       SetProbeOutputValue("RES_DENSITY", index, solver[FLOW_SOL]->LinSysRes(iPoint, 0));

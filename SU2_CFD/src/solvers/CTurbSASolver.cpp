@@ -235,9 +235,10 @@ void CTurbSASolver::Postprocessing(CGeometry *geometry, CSolver **solver_contain
     const su2double dist = geometry->nodes->GetWall_Distance(iPoint) + rough_const * roughness;
 
     su2double Ji = nu_hat/nu;
+    
     if (roughness > 1.0e-10)
       Ji += cR1*roughness/(dist+EPS);
-
+   
     const su2double Ji_3 = Ji*Ji*Ji;
     const su2double fv1  = Ji_3/(Ji_3+cv1_3);
 
@@ -364,17 +365,14 @@ void CTurbSASolver::Source_Residual(CGeometry *geometry, CSolver **solver_contai
        *    where k_s is the equivalent sand grain roughness height that is specified in cfg file.
        *    For smooth walls, wall roughness is zero and computed wall distance remains the same. */
 
-      su2double modifiedWallDistance = geometry->nodes->GetWall_Distance(iPoint);
+    su2double modifiedWallDistance = geometry->nodes->GetWall_Distance(iPoint);
 
-      modifiedWallDistance += 0.03*geometry->nodes->GetRoughnessHeight(iPoint);
+    modifiedWallDistance += 0.03*geometry->nodes->GetRoughnessHeight(iPoint);
 
       /*--- Set distance to the surface ---*/
 
       numerics->SetDistance(modifiedWallDistance, 0.0);
-
-      /*--- Set the roughness of the closest wall. ---*/
-
-      numerics->SetRoughness(geometry->nodes->GetRoughnessHeight(iPoint), 0.0 );
+      numerics->SetDistance(geometry->nodes->GetWall_Distance(iPoint), 0.0);
 
     } else {
 

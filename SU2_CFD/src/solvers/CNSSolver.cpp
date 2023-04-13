@@ -154,9 +154,7 @@ void CNSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_container, C
   /*--- Calculate the eddy viscosity using a SGS model ---*/
 
   if (SGSModelUsed){
-    SU2_OMP_MASTER
     Setmut_LES(geometry, solver_container, config);
-    SU2_OMP_BARRIER
   }
 
   if (wall_functions) {
