@@ -1639,6 +1639,30 @@ void CFlowOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver 
     SetVolumeOutputValue("SKIN_FRICTION-Z", iPoint, solver[FLOW_SOL]->GetCSkinFriction(iMarker, iVertex, 2));
   SetVolumeOutputValue("HEAT_FLUX", iPoint, solver[heat_sol]->GetHeatFlux(iMarker, iVertex));
   SetVolumeOutputValue("Y_PLUS", iPoint, solver[FLOW_SOL]->GetYPlus(iMarker, iVertex));
+  
+  su2double *normal = nullptr;
+
+  su2double Area;
+
+  /*--- Compute geometric quantities ---*/
+
+  normal = new su2double[nDim];geometry->vertex[iMarker][iVertex]->GetNormal(normal);
+
+  Area = 0.0;
+
+  for (int iDim = 0; iDim < nDim; iDim++){
+    Area += normal[iDim]*normal[iDim];
+  }
+
+  Area = sqrt(Area);
+
+  SetVolumeOutputValue("NORMAL-X", iPoint, normal[0]);
+  SetVolumeOutputValue("NORMAL-Y", iPoint, normal[1]);
+  if (nDim == 3) SetVolumeOutputValue("NORMAL-Z", iPoint, normal[2]);
+
+  SetVolumeOutputValue("AREA", iPoint, Area);
+
+  delete normal;
 }
 
 void CFlowOutput::AddAerodynamicCoefficients(const CConfig* config) {
