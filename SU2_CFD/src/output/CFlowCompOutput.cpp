@@ -298,6 +298,12 @@ void CFlowCompOutput::SetVolumeOutputFields(CConfig *config){
   if (config->GetTime_Domain()){
     SetTimeAveragedFields();
   }
+
+  AddVolumeOutput("NORMAL-X", "Normal_x", "NORMALS", "Surface normals");
+  AddVolumeOutput("NORMAL-Y", "Normal_y", "NORMALS", "Surface normals");
+  if (nDim == 3) AddVolumeOutput("NORMAL-Z", "Normal_z", "NORMALS", "Surface normals");
+  AddVolumeOutput("AREA", "Area", "NORMALS", "Surface normals");
+
 }
 
 void CFlowCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
