@@ -354,6 +354,15 @@ class CSysVector : public VecExpr::CVecExpr<CSysVector<ScalarType>, ScalarType> 
   }
 
   /*!
+   * \brief Set the velocity residual to zero.
+   * \param[in] val_ipoint - index of the point where set the residual.
+   * \param[in] val_var - inde of the residual to be set.
+   */
+  inline void SetBlock_Zero(unsigned long val_ipoint, unsigned long val_var) {
+    vec_val[val_ipoint*nVar+val_var] = 0.0;
+  }
+
+  /*!
    * \brief Set "block" to the vector.
    * \note Template param Overwrite can be set to false to update existing values.
    * \param[in] iPoint - index of the point where set the residual.

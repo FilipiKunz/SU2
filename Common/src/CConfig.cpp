@@ -2812,11 +2812,19 @@ void CConfig::SetConfig_Options() {
   /* DESCRIPTION: DES Constant */
   addDoubleOption("DES_CONST", Const_DES, 0.65);
 
+  /* DESCRIPTION: Time filtering value for WMLES */
+  addDoubleOption("TIMEFILTER_WMLES", TimeFilter_WMLES, 1.0);
+
   /* DESCRIPTION: Specify Hybrid RANS/LES model */
   addEnumOption("HYBRID_RANSLES", Kind_HybridRANSLES, HybridRANSLES_Map, NO_HYBRIDRANSLES);
 
   /* DESCRIPTION: Roe with low dissipation for unsteady flows */
   addEnumOption("ROE_LOW_DISSIPATION", Kind_RoeLowDiss, RoeLowDiss_Map, NO_ROELOWDISS);
+  /* DESCRIPTION: Activate WMLES Monitoring */
+  addBoolOption("WMLES_MONITORING", WMLES_Monitoring, false);  
+
+  /* DESCRIPTION: Activate WMLES 1st Point OFF WALL */
+  addBoolOption("WMLES_FIRST_POINT", WMLES_First_Point, false);
 
   /* DESCRIPTION: Compute Average for unsteady simulations */
   addBoolOption("COMPUTE_AVERAGE", Compute_Average, false);
@@ -3496,7 +3504,9 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
   /*--- Set the boolean Wall_Functions equal to true if there is a
    definition for the wall founctions ---*/
 
+  /*
   Wall_Functions = false;
+  Wall_Models    = false;
   if (nMarker_WallFunctions > 0) {
     for (iMarker = 0; iMarker < nMarker_WallFunctions; iMarker++) {
       if (Kind_WallFunctions[iMarker] != WALL_FUNCTIONS::NONE)
@@ -3504,24 +3514,52 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
 
       if ((Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::ADAPTIVE_FUNCTION) ||
           (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::SCALABLE_FUNCTION) ||
-          (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::NONEQUILIBRIUM_MODEL))
+          (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::NONEQUILIBRIUM_MODEL) ||
+          (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::LOGARITHMIC_MODEL))
         SU2_MPI::Error(string("For RANS problems, use NONE, STANDARD_WALL_FUNCTION or EQUILIBRIUM_WALL_MODEL.\n"), CURRENT_FUNCTION);
 
       if (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::STANDARD_FUNCTION) {
         if (!((Kind_Solver == MAIN_SOLVER::RANS) || (Kind_Solver == MAIN_SOLVER::INC_RANS)))
           SU2_MPI::Error(string("Wall model STANDARD_FUNCTION only available for RANS or INC_RANS.\n"), CURRENT_FUNCTION);
         if (nRough_Wall != 0)
+  //if (Wall_Models && TimeMarching == NO){
+  //  SU2_MPI::Error("TIME_MARCHING must be different than NO with using WMLES", CURRENT_FUNCTION);
+  //}
+
+  //if (Wall_Models && Kind_Turb_Model != NONE){
+  //  SU2_MPI::Error("KIND_TURB_MODEL must be NONE if using WMLES", CURRENT_FUNCTION);
+  //}
+
           SU2_MPI::Error(string("Wall model STANDARD_FUNCTION and WALL_ROUGHNESS migh not be compatible. Checking required!\n"), CURRENT_FUNCTION);
       }
+*/
+  /*--- Set the boolean Wall_Functions equal to true if there is a
+   definition for the wall founctions ---*/
 
+  Wall_Functions = false;
+  Wall_Models    = false;
+
+  if (nMarker_WallFunctions > 0) {
+    for (iMarker = 0; iMarker < nMarker_WallFunctions; iMarker++) {
+      if (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::STANDARD_WALL_FUNCTION){
+        Wall_Functions = true; break;
+      }
+      else if (Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::LOGARITHMIC_WALL_MODEL ||
+               Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::EQUILIBRIUM_WALL_MODEL ||
+               Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::ALGEBRAIC_WALL_MODEL   ||
+               Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::TEMPLATE_WALL_MODEL    ||
+               Kind_WallFunctions[iMarker] == WALL_FUNCTIONS::APGLL_WALL_MODEL)   {
+        Wall_Models = true; break;
+      }
+    }
+  }
   /* Check for the correct use of SGS Models */
 
   if ((Kind_Turb_Model != TURB_MODEL::NONE) && (Kind_SGS_Model != TURB_SGS_MODEL::NONE) && !Time_Domain){
     if (Kind_Solver!=MAIN_SOLVER::NAVIER_STOKES)
       SU2_MPI::Error("SGS models are only available in the NAVIER STOKES solver.", CURRENT_FUNCTION);
     }
-  }
-  }
+
 
   /*--- Initialize the AoA and Sideslip variables for the incompressible
    solver. This is typically unused (often internal flows). Also fixed CL
@@ -9242,7 +9280,7 @@ pair<WALL_TYPE, su2double> CConfig::GetWallRoughnessProperties(string val_marker
 
 WALL_FUNCTIONS CConfig::GetWallFunction_Treatment(string val_marker) const {
 
-  WALL_FUNCTIONS WallFunction = WALL_FUNCTIONS::NONE;
+  WALL_FUNCTIONS WallFunction = WALL_FUNCTIONS::NO_WALL_FUNCTION;
 
   for(unsigned short iMarker=0; iMarker<nMarker_WallFunctions; iMarker++) {
     if(Marker_WallFunctions[iMarker] == val_marker) {

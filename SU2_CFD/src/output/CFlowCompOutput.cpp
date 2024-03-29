@@ -296,7 +296,7 @@ void CFlowCompOutput::SetVolumeOutputFields(CConfig *config){
   AddCommonFVMOutputs(config);
 
   if (config->GetTime_Domain()){
-    SetTimeAveragedFields();
+    SetTimeAveragedFields(config);
   }
 
   AddVolumeOutput("NORMAL-X", "Normal_x", "NORMALS", "Surface normals");
@@ -459,7 +459,7 @@ void CFlowCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolv
   LoadCommonFVMOutputs(config, geometry, iPoint);
 
   if (config->GetTime_Domain()){
-    LoadTimeAveragedData(iPoint, Node_Flow);
+    LoadTimeAveragedData(iPoint, Node_Flow, config);
   }
 }
 

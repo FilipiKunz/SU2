@@ -1890,7 +1890,7 @@ public:
          If not, create an error message and return. */
       ++counter;
       const unsigned short indWallType = counter;
-      auto typeWF = WALL_FUNCTIONS::NONE;
+      auto typeWF = WALL_FUNCTIONS::NO_WALL_FUNCTION;
       bool validWF = true;
       if (counter == totalSize) validWF = false;
       else {
@@ -1919,9 +1919,12 @@ public:
             must be specified. Hence the counter must be updated
             accordingly. ---*/
       switch( typeWF ) {
-        case WALL_FUNCTIONS::EQUILIBRIUM_MODEL:    counter += 3; break;
-        case WALL_FUNCTIONS::NONEQUILIBRIUM_MODEL: counter += 2; break;
-        case WALL_FUNCTIONS::LOGARITHMIC_MODEL: counter += 3; break;
+        case WALL_FUNCTIONS::EQUILIBRIUM_WALL_MODEL:
+        case WALL_FUNCTIONS::LOGARITHMIC_WALL_MODEL:
+        case WALL_FUNCTIONS::ALGEBRAIC_WALL_MODEL:
+        case WALL_FUNCTIONS::APGLL_WALL_MODEL:
+        case WALL_FUNCTIONS::TEMPLATE_WALL_MODEL:
+          counter += 3; break;
         default: break;
       }
 
@@ -1965,8 +1968,11 @@ public:
             is needed, which is extracted from option_value. ---*/
       switch( this->walltype[i] ) {
 
-        case WALL_FUNCTIONS::EQUILIBRIUM_MODEL: {
-
+        case WALL_FUNCTIONS::APGLL_WALL_MODEL:
+        case WALL_FUNCTIONS::ALGEBRAIC_WALL_MODEL:
+        case WALL_FUNCTIONS::TEMPLATE_WALL_MODEL:
+        case WALL_FUNCTIONS::LOGARITHMIC_WALL_MODEL:
+        case WALL_FUNCTIONS::EQUILIBRIUM_WALL_MODEL: {
           /* LES equilibrium wall model. The exchange distance, stretching
              factor and number of points in the wall model must be specified. */
           this->intInfo[i]    = new unsigned short[1];
@@ -1989,63 +1995,6 @@ public:
 
           break;
         }
-
-        case WALL_FUNCTIONS::NONEQUILIBRIUM_MODEL: {
-
-          /* LES non-equilibrium model. The RANS turbulence model and
-             the exchange distance need to be specified. */
-          this->intInfo[i]    = new unsigned short[1];
-          this->doubleInfo[i] = new su2double[1];
-
-          /* Check for a valid RANS turbulence model. */
-          map<string, TURB_MODEL>::const_iterator iit;
-          iit = Turb_Model_Map.find(option_value[counter++]);
-          if(iit == Turb_Model_Map.end()) {
-            string newstring;
-            newstring.append(this->name);
-            newstring.append(", marker ");
-            newstring.append(this->markers[i]);
-            newstring.append(", wall function type ");
-            newstring.append(option_value[counter-2]);
-            newstring.append(": Invalid RANS turbulence model, ");
-            newstring.append(option_value[counter-1]);
-            newstring.append(", specified");
-            return newstring;
-          }
-
-          /* Extract the exchange distance. */
-          istringstream ss_1st(option_value[counter++]);
-          if (!(ss_1st >> this->doubleInfo[i][0])) {
-            return badValue("su2double", this->name);
-          }
-
-          break;
-        }
-        case WALL_FUNCTIONS::LOGARITHMIC_MODEL: {
-
-          /* LES Logarithmic law-of-the-wall model. The exchange distance, stretching
-           factor and number of points in the wall model must be specified. */
-          this->intInfo[i]    = new unsigned short[1];
-          this->doubleInfo[i] = new su2double[2];
-
-          istringstream ss_1st(option_value[counter++]);
-          if (!(ss_1st >> this->doubleInfo[i][0])) {
-            return badValue("su2double", this->name);
-          }
-
-          istringstream ss_2nd(option_value[counter++]);
-          if (!(ss_2nd >> this->doubleInfo[i][1])) {
-            return badValue("su2double", this->name);
-          }
-
-          istringstream ss_3rd(option_value[counter++]);
-          if (!(ss_3rd >> this->intInfo[i][0])) {
-            return badValue("unsigned short", this->name);
-          }
-
-          break;
-        }
-
         default: // Just to avoid a compiler warning.
           break;
       }
@@ -2057,6 +2006,7 @@ public:
 
   void SetDefault() override {
     markers = nullptr;
+    markers    = NULL;
     walltype = nullptr;
     intInfo = nullptr;
     doubleInfo = nullptr;

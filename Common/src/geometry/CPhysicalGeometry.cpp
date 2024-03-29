@@ -4570,6 +4570,175 @@ void CPhysicalGeometry::Check_BoundElem_Orientation(const CConfig *config) {
   }
 
 }
+void CPhysicalGeometry::BuildLocalVolumeADT(CADTElemClass *&localVolumeADT) {
+
+  /* Define the vectors needed to build the ADT. */
+  vector<unsigned long>  elemConn;
+  vector<unsigned short> VTK_TypeElem;
+  vector<unsigned short> markerIDElem;
+  vector<unsigned long>  elemID;
+
+  /*--- Loop over all elements ---*/
+  for (unsigned long iElem = 0; iElem < nElem; iElem++){
+
+    /*--- Easier storage of the element type, store the element ID and set
+          a dummy for the marker ID, as this is only relevant for a surface
+          search. ---*/
+    unsigned short VTK_Type = elem[iElem]->GetVTK_Type();
+
+    VTK_TypeElem.push_back(VTK_Type);
+    elemID.push_back(iElem);
+    markerIDElem.push_back(0);
+
+    /*--- Store the starting index for the storage of this connectivity.
+          This is needed later on if the connectivity for a prism
+          must be swapped. ---*/
+    const unsigned long startInd = elemConn.size();
+
+    /*--- Loop over the nodes of the element and store them in elemConn. ---*/
+    for (unsigned short iNode = 0; iNode < elem[iElem]->GetnNodes(); iNode++)
+      elemConn.push_back(elem[iElem]->GetNode(iNode));
+
+    /*--- Check for a prism. ---*/
+    if(VTK_Type == PRISM) {
+
+      /*--- The VTK convention for a PRISM differs from the connectivity
+            convention used in the ADT. There renumber the connectivity,
+            such that it corresponds to the ADT convention. ---*/
+      swap(elemConn[startInd+1], elemConn[startInd+2]);
+      swap(elemConn[startInd+4], elemConn[startInd+5]);
+    }
+  }
+
+  /*--- Create the coordinates of all the volume points ---*/
+  vector<su2double> volCoor;
+  volCoor.reserve(nDim*nPoint);
+
+  for(unsigned long i=0; i<nPoint; ++i) {
+    for(unsigned short k=0; k<nDim; ++k)
+      volCoor.push_back(nodes->GetCoord(i,k));
+  }
+
+  /* Create and build the ADT. */
+  localVolumeADT = new CADTElemClass(nDim, volCoor, elemConn, VTK_TypeElem,
+                                     markerIDElem, elemID, false);
+}
+
+void CPhysicalGeometry::WallModelPreprocessing(CConfig *config) {
+
+  int nDonorNoFound = 0;
+
+  /* Build the local ADT of the volume elements, including halo elements. */
+  CADTElemClass *localVolumeADT;
+  BuildLocalVolumeADT(localVolumeADT);
+
+  /* Loop over the markers and select the ones for which a wall function
+     treatment must be carried out. */
+  for(unsigned short iMarker=0; iMarker<nMarker; ++iMarker) {
+
+    switch (config->GetMarker_All_KindBC(iMarker)) {
+      case ISOTHERMAL:
+      case HEAT_FLUX: {
+        const string Marker_Tag = config->GetMarker_All_TagBound(iMarker);
+        if(config->GetWallFunction_Treatment(Marker_Tag) != WALL_FUNCTIONS::NO_WALL_FUNCTION) {
+
+          /* Retrieve the floating point information for this boundary marker. The
+             exchange location is the first element of the floating point array. */
+          const su2double *doubleInfo = config->GetWallFunction_DoubleInfo(Marker_Tag);
+
+          /*--- Loop over the vertices of the boundary marker. ---*/
+          for (unsigned long iVertex = 0; iVertex < nVertex[iMarker]; iVertex++) {
+
+            unsigned long iPoint = vertex[iMarker][iVertex]->GetNode();
+            su2double *iNormal = vertex[iMarker][iVertex]->GetNormal();
+            su2double normals[] = {0.0,0.0,0.0},Area;
+            su2double *Coord  = nodes->GetCoord(iPoint);
+
+            Area = 0.0; for (unsigned short iDim = 0; iDim < nDim; iDim++) Area += iNormal[iDim]*iNormal[iDim];
+            Area = sqrt(Area);
+            for (unsigned short iDim = 0; iDim < nDim; iDim++) normals[iDim] = -iNormal[iDim]/Area;
+
+            /* Determine the coordinates of the exchange location. Note that the normals
+             point out of the domain, so the normals must be subtracted. */
+            su2double coorExchange[] = {0.0, 0.0, 0.0};  // To avoid a compiler warning.
+            for(unsigned short iDim=0; iDim<nDim; ++iDim)
+              coorExchange[iDim] = Coord[iDim] - doubleInfo[0]*normals[iDim];
+
+            /* Search for the element, which contains the exchange location. */
+            unsigned short dummy;
+            unsigned long  donorElem;
+            int            rankElem;
+            su2double      parCoor[3], weightsInterpol[8];
+            bool ContainingElem = localVolumeADT->DetermineContainingElement(coorExchange, dummy,
+                                                           donorElem, rankElem, parCoor,
+                                                           weightsInterpol);
+            if( ContainingElem ) {
+
+              /*--- Donor element found. If this element is a prism, swap some
+                    of the weights. This is due to difference in connectivity
+                    between ADT and VTK storage. ---*/
+              if(elem[donorElem]->GetVTK_Type() == PRISM) {
+                swap(weightsInterpol[1], weightsInterpol[2]);
+                swap(weightsInterpol[4], weightsInterpol[5]);
+              }
+
+              /*--- Store the interpolation information for this vertex. ---*/
+              unsigned short nDonors = elem[donorElem]->GetnNodes();
+
+              vertex[iMarker][iVertex]->SetDonorElem(donorElem);
+              vertex[iMarker][iVertex]->SetnDonorPoints(nDonors);
+              vertex[iMarker][iVertex]->Allocate_DonorInfo(nDonors);
+              vertex[iMarker][iVertex]->SetDonorFound(true);
+
+              for (unsigned short iNode = 0; iNode < nDonors; iNode++) {
+                const unsigned long donor = elem[donorElem]->GetNode(iNode);
+                vertex[iMarker][iVertex]->SetInterpDonorPoint(iNode, donor);
+                vertex[iMarker][iVertex]->SetInterpDonorProcessor(iNode, nodes->GetColor(donor));
+                vertex[iMarker][iVertex]->SetDonorCoeff(iNode, weightsInterpol[iNode]);
+              }
+            }
+            else {
+
+              nDonorNoFound += 1;
+              vertex[iMarker][iVertex]->SetDonorFound(false);
+              /* Donor element not found in the local ADT. This should not happen,
+                 because all halo donors should have been added in the function
+                 CPhysicalGeometry::AddWallModelDonorHalos. */
+              std::cout << "Rank          " << rank << std::endl;
+              std::cout << "Marker tag    " << Marker_Tag << std::endl;
+              std::cout << "iMarker:      " << iMarker << ", iVertex: " << iVertex << std::endl;
+              std::cout << "Coord:        " << Coord[0] << " " << Coord[1] << " " << Coord[2] << std::endl;
+              std::cout << "normals:      " << normals[0] << " " << normals[1] << " " << normals[2] << std::endl;
+              std::cout << "coorExchange: " << coorExchange[0] << " " << coorExchange[1] << " " << coorExchange[2] << std::endl << std::endl;
+              //SU2_MPI::Error("Donor element not found. This should not happen", CURRENT_FUNCTION);
+
+            }
+          }
+        }
+        break;
+      }
+      default:
+        break;
+
+    }
+  }
+
+  /* Determine the total number of donor elements not found. */
+  vector<int> recvCounts(size), displs(size);
+
+  SU2_MPI::Allgather(&nDonorNoFound, 1, MPI_INT, recvCounts.data(), 1,
+                     MPI_INT, SU2_MPI::GetComm());
+  displs[0] = 0;
+  for(int i=1; i<size; ++i) displs[i] = displs[i-1] + recvCounts[i-1];
+
+  const int nGlobalDonorNoFound = displs.back() + recvCounts.back();
+
+  if (rank == MASTER_NODE) cout << " Number of donor elements not found: " << nGlobalDonorNoFound << endl;
+
+  /* Delete the memory of localVolumeADT again. */
+  delete localVolumeADT;
+}
+
 
 void CPhysicalGeometry::SetPositive_ZArea(CConfig *config) {
   unsigned short iMarker, Boundary, Monitoring;
@@ -4921,6 +5090,15 @@ void CPhysicalGeometry::SetRCM_Ordering(CConfig *config) {
     }
   }
 
+  if (config->GetWall_Models()){
+    /* Adapt the array Local_to_Global_Point and the map Global_to_Local_Point
+       to the new numbering. */
+    Global_to_Local_Point.clear();
+    for (auto iPoint = 0; iPoint < nPoint; iPoint++) {
+      Local_to_Global_Point[iPoint] = nodes->GetGlobalIndex(iPoint);
+      Global_to_Local_Point[Local_to_Global_Point[iPoint]] = iPoint;
+    }
+  }
 }
 
 void CPhysicalGeometry::SetElement_Connectivity(void) {

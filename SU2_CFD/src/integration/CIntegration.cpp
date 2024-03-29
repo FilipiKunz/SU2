@@ -51,6 +51,8 @@ void CIntegration::Space_Integration(CGeometry *geometry,
 
   /*--- Compute inviscid residuals ---*/
 
+
+
   switch (config->GetKind_ConvNumScheme()) {
     case SPACE_CENTERED:
       solver_container[MainSolver]->Centered_Residual(geometry, solver_container, numerics, config, iMesh, iRKStep);
@@ -59,6 +61,8 @@ void CIntegration::Space_Integration(CGeometry *geometry,
       solver_container[MainSolver]->Upwind_Residual(geometry, solver_container, numerics, config, iMesh);
       break;
   }
+
+
 
   /*--- Compute viscous residuals ---*/
   solver_container[MainSolver]->Viscous_Residual(geometry, solver_container, numerics, config, iMesh, iRKStep);
@@ -79,6 +83,8 @@ void CIntegration::Space_Integration(CGeometry *geometry,
   /*--- Pause preaccumulation in boundary conditions for hybrid parallel AD. ---*/
   /// TODO: Check if this is really needed.
   //const auto pausePreacc = (omp_get_num_threads() > 1) && AD::PausePreaccumulation();
+  SU2_OMP_MASTER
+  {
 
   /*--- Boundary conditions that depend on other boundaries (they require MPI sincronization)---*/
 
@@ -96,6 +102,7 @@ void CIntegration::Space_Integration(CGeometry *geometry,
 
   for (iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
     KindBC = config->GetMarker_All_KindBC(iMarker);
+
     switch (KindBC) {
       case EULER_WALL:
         solver_container[MainSolver]->BC_Euler_Wall(geometry, solver_container, conv_bound_numerics, visc_bound_numerics, config, iMarker);
@@ -141,6 +148,13 @@ void CIntegration::Space_Integration(CGeometry *geometry,
       case SYMMETRY_PLANE:
         solver_container[MainSolver]->BC_Sym_Plane(geometry, solver_container, conv_bound_numerics, visc_bound_numerics, config, iMarker);
         break;
+
+      case ISOTHERMAL: case HEAT_FLUX:
+      if ( (config->GetWall_Models()) && (MainSolver == FLOW_SOL) && (config->GetKind_Regime() == ENUM_REGIME::COMPRESSIBLE) ) {
+              solver_container[MainSolver]->BC_WallModel(geometry, solver_container, numerics[CONV_BOUND_TERM], numerics[VISC_BOUND_TERM], config, iMarker);
+            }
+            break;
+
     }
   }
 
@@ -186,7 +200,8 @@ void CIntegration::Space_Integration(CGeometry *geometry,
   }
 
   //AD::ResumePreaccumulation(pausePreacc);
-
+  } // end SU2_OMP_MASTER
+  SU2_OMP_BARRIER
 }
 
 void CIntegration::Time_Integration(CGeometry *geometry, CSolver **solver_container, CConfig *config,

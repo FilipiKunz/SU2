@@ -148,7 +148,12 @@ CEulerSolver::CEulerSolver(CGeometry *geometry, CConfig *config,
   /*--- Allocate base class members. ---*/
 
   Allocate(*config);
-
+  Res_Conv      = new su2double[nVar]();
+  Res_Visc      = new su2double[nVar]();
+  Res_Sour      = new su2double[nVar]();
+  /*--- Define some auxiliary vectors related to the geometry ---*/
+  
+  Vector = new su2double[nDim]();
   /*--- MPI + OpenMP initialization. ---*/
 
   HybridParallelInitialization(*config, *geometry);

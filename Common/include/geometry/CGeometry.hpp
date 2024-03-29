@@ -669,6 +669,19 @@ public:
                                unsigned short &face_second_elem) {return false;}
 
   /*!
+  * \brief Function that computes the interpolation information for the exchange
+           location for the wall model treatment.
+  * \param[in] config - Definition of the particular problem.
+  */
+  inline virtual void WallModelPreprocessing(CConfig *config) {}
+
+  /*!
+  * \brief Function, which builds the ADT of the locally stored volume elements.
+  * \param[out] localVolumeADT - Pointer to the ADT to be built.
+  */
+  inline virtual void BuildLocalVolumeADT(CADTElemClass *&localVolumeADT) {}
+  
+  /*!
    * \brief Sets area to be positive in Z direction.
    * \param[in] config - Definition of the particular problem.
    */

@@ -1,4 +1,4 @@
-/*!
+ /*!
  * \file CFVMFlowSolverBase.hpp
  * \brief Base class template for all FVM flow solvers.
  * \version 7.5.0 "Blackbird"
@@ -1259,13 +1259,13 @@ class CFVMFlowSolverBase : public CSolver {
    * \brief Get the max Omega.
    * \return Value of the max Omega.
    */
-  inline su2double GetOmega_Max(void) const final { return Omega_Max; }
+  inline su2double GetOmega_Max(void) const { return Omega_Max; }
 
   /*!
    * \brief Get the max Strain rate magnitude.
    * \return Value of the max Strain rate magnitude.
    */
-  inline su2double GetStrainMag_Max(void) const final { return StrainMag_Max; }
+  inline su2double GetStrainMag_Max(void) const { return StrainMag_Max; }
 
   /*!
    * \brief Provide the non dimensional lift coefficient (inviscid contribution).

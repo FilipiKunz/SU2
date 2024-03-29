@@ -32,7 +32,47 @@ using namespace GeometryToolbox;
 
 CVertex::CVertex(unsigned long val_point, unsigned short val_nDim) :
   CDualGrid(val_nDim) {
+  unsigned short iDim;
+
+  /*--- Set periodic points to zero ---*/
+
+  PeriodicPoint[0] = -1; PeriodicPoint[1] = -1; PeriodicPoint[2] = -1;
+  PeriodicPoint[3] = -1; PeriodicPoint[4] = -1;
+
+  /*--- Identify the points at the perimeter of the actuatrod disk ---*/
+
+  ActDisk_Perimeter = false;
+
+  /*--- Initializate the structure ---*/
+
   Nodes[0] = val_point;
+
+  for (iDim = 0; iDim < 3; iDim ++) Normal[iDim] = 0.0;
+
+  /*--- Set to zero the variation of the coordinates ---*/
+
+  for (iDim = 0; iDim < 3; iDim ++) VarCoord[iDim] = 0.0;
+
+  /*--- Set to nullptr variation of the rotation  ---*/
+
+  VarRot = nullptr;
+
+  /*--- Set to nullptr donor arrays for interpolation ---*/
+
+  Donor_Points  = nullptr;
+  Donor_Proc    = nullptr;
+  Donor_Coeff   = nullptr;
+  nDonor_Points = 1;
+
+}
+
+CVertex::~CVertex() {
+
+  delete[] VarRot;
+  delete[] Donor_Coeff;
+  delete[] Donor_Proc;
+  delete[] Donor_Points;
+  
 }
 
 void CVertex::SetNodes_Coord(const su2double *coord_Edge_CG,
@@ -56,4 +96,17 @@ void CVertex::SetNodes_Coord(const su2double *val_coord_Edge_CG,
 
   Normal[0] += val_coord_Elem_CG[1]-val_coord_Edge_CG[1];
   Normal[1] -= val_coord_Elem_CG[0]-val_coord_Edge_CG[0];
+}
+void CVertex::Allocate_DonorInfo(unsigned short nDonor) {
+
+  nDonor_Points = nDonor;
+
+  delete [] Donor_Points;
+  delete [] Donor_Proc;
+  delete [] Donor_Coeff;
+
+  Donor_Points = new unsigned long [nDonor_Points];
+  Donor_Proc   = new unsigned long [nDonor_Points];
+  Donor_Coeff  = new su2double [nDonor_Points];
+
 }

@@ -43,10 +43,20 @@ protected:
   su2double CartCoord[3] = {0.0};       /*!< \brief Vertex cartesians coordinates. */
   su2double VarCoord[3] = {0.0};        /*!< \brief Used for storing the coordinate variation due to a surface modification. */
   long PeriodicPoint[5] = {-1};         /*!< \brief Store the periodic point of a boundary (iProcessor, iPoint) */
+  su2double *VarRot;             /*!< \brief Used for storing the rotation variation due to a surface modification. */
+
   bool ActDisk_Perimeter = false;       /*!< \brief Identify nodes at the perimeter of the actuator disk */
   short Rotation_Type;                  /*!< \brief Type of rotation associated with the vertex (MPI and periodic) */
   unsigned long Normal_Neighbor;        /*!< \brief Index of the closest neighbor. */
+  unsigned long *Donor_Points;   /*!< \brief indices of donor points for interpolation across zones */
+  unsigned long *Donor_Proc;     /*!< \brief indices of donor processor for interpolation across zones in parallel */
   su2double Basis_Function[3] = {0.0};  /*!< \brief Basis function values for interpolation across zones. */
+  su2double *Donor_Coeff;        /*!< \brief Store a list of coefficients corresponding to the donor points. */
+  unsigned short nDonor_Points;  /*!< \brief Number of points in Donor_Coeff. */
+  unsigned long Donor_Elem;      /*!< \brief Store the donor element for interpolation across zones. Also used for
+                                             the interpolation for wall model data. */
+  bool Donor_Found;              /*!< \brief Flag nodes that the donor element was found (WMLES) */
+
 
 public:
   /*!
@@ -55,6 +65,11 @@ public:
    * \param[in] val_nDim - Number of dimensions of the problem.
    */
   CVertex(unsigned long val_point, unsigned short val_nDim);
+
+  /*!
+   * \brief Destructor of the class.
+   */
+  ~CVertex(void) override;
 
   /*!
    * \brief Get the number of nodes of a vertex.
@@ -327,4 +342,102 @@ public:
    */
   inline unsigned long GetNormal_Neighbor(void) const { return Normal_Neighbor; }
 
+/*!
+	 * \brief Set the donor element of a vertex for interpolation across zones.
+	 * \param[in] val_donorelem - donor element index.
+	 */
+  inline void SetDonorElem(long val_donorelem) { Donor_Elem = val_donorelem; }
+
+  /*!
+	 * \brief Get the donor element of a vertex for interpolation across zones.
+	 * \return Donor_Elem - Value of the donor element of a vertex.
+	 */
+  inline long GetDonorElem(void) const { return Donor_Elem; }
+
+  /*!
+	 * \brief Set flag if the donor element of a vertex was found
+	 * \param[in] val_donorfound - Flag if donor element was found
+	 */
+  inline void SetDonorFound(bool val_donorfound) { Donor_Found = val_donorfound; }
+
+  /*!
+	 * \brief Get flag if the donor element of a vertex was found
+	 * \return  Donor_Found - Flag if donor element was found
+	 */
+  inline bool GetDonorFound(void) const { return Donor_Found; }
+
+  /*!
+   * \brief Set the value of nDonor_Points
+   * \param[in] val_nDonor_Points - the number of donor points
+   */
+  inline void SetnDonorPoints(unsigned short val_nDonor_Points) { nDonor_Points = val_nDonor_Points;}
+
+  /*!
+   * \brief Return the value of nDonor_Points
+   * \return nDonor_Points - the number of donor points
+   */
+  inline unsigned short GetnDonorPoints(void) const { return nDonor_Points;}
+
+  /*!
+   * \brief Set the coefficient value of a donor point.
+   * \param[in] iDonor - Index of the donor point.
+   * \param[in] val  - Value of the coefficent for point iDonor.
+   */
+  inline void SetDonorCoeff(unsigned short iDonor, su2double val) const { Donor_Coeff[iDonor] = val; }
+
+  /*!
+   * \brief Get the coefficient value of a donor point.
+   * \param[in] iDonor - Index of the donor point.
+   * \return  - Value of the coefficent for point iDonor.
+   */
+  inline su2double GetDonorCoeff(unsigned short iDonor) const { return Donor_Coeff[iDonor];}
+
+  /*!
+   * \brief Set the donor point of a vertex for interpolation across zones.
+   * \param[in] val_donorpoint- donor face index (w/in donor elem).
+   */
+  inline void SetInterpDonorPoint(unsigned short val_donorindex, long val_donorpoint) {
+    Donor_Points[val_donorindex] = val_donorpoint;
+  }
+
+  /*!
+   * \brief Get the value of the donor point of a vertex (for interpolation).
+   * \return Value of the donor point of a vertex.
+   */
+  inline long GetInterpDonorPoint(unsigned short val_donorindex) const { return Donor_Points[val_donorindex]; }
+
+  /*!
+   * \brief Set the donor point of a vertex for interpolation across zones.
+   * \param[in] val_donorpoint- donor face index (w/in donor elem).
+   */
+  inline void SetInterpDonorProcessor(unsigned short val_donorindex, long val_donorpoint) {
+    Donor_Proc[val_donorindex] = val_donorpoint;
+  }
+
+  /*!
+   * \brief Get the value of the donor point of a vertex (for interpolation).
+   * \return Value of the donor point of a vertex.
+   */
+  inline long GetInterpDonorProcessor(unsigned short val_donorindex) const { return Donor_Proc[val_donorindex]; }
+
+  /*!
+   * \brief Allocate memory based on how many donor points need to be stored.
+   * \param[in] nDonor - the number of donor points
+   */
+  void Allocate_DonorInfo(unsigned short nDonor);
+
+  /*!
+   * \brief Get the rotation variation
+   * \return  - pointer to the vector defining the rotation
+   */
+  inline su2double *GetVarRot(void) { return VarRot;}
+
+  /*!
+   * \brief Set the rotation variation
+   * \return  - pointer to the vector defining the rotation
+   */
+  inline void SetVarRot(const su2double* val) {
+    for (unsigned short iDim = 0; iDim < nDim; iDim++)
+      VarRot[iDim] = val[iDim];
+  }
 };

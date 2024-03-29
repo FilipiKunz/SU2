@@ -286,7 +286,7 @@ void CNEMOCompOutput::SetVolumeOutputFields(CConfig *config){
   AddCommonFVMOutputs(config);
 
   if (config->GetTime_Domain()){
-    SetTimeAveragedFields();
+    SetTimeAveragedFields(config);
   }
 }
 
@@ -441,7 +441,7 @@ void CNEMOCompOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolv
   LoadCommonFVMOutputs(config, geometry, iPoint);
 
   if (config->GetTime_Domain()) {
-    LoadTimeAveragedData(iPoint, Node_Flow);
+    LoadTimeAveragedData(iPoint, Node_Flow, config);
   }
 }
 

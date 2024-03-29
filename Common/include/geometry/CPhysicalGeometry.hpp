@@ -370,6 +370,19 @@ public:
                 unsigned short &face_second_elem) override;
 
   /*!
+   * \brief Function that computes the interpolation information for the exchange
+            location for the wall model treatment.
+   * \param[in] config - Definition of the particular problem.
+   */
+  void WallModelPreprocessing(CConfig *config) override;
+
+  /*!
+   * \brief Function, which builds the ADT of the locally stored volume elements.
+   * \param[out] localVolumeADT - Pointer to the ADT to be built.
+   */
+  void BuildLocalVolumeADT(CADTElemClass *&localVolumeADT) override;
+
+  /*!
    * \brief Compute surface area (positive z-direction) for force coefficient non-dimensionalization.
    * \param[in] config - Definition of the particular problem.
    */

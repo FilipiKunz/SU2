@@ -95,6 +95,7 @@ void CMultiGridIntegration::MultiGrid_Iteration(CGeometry ****geometry,
     SU2_OMP_SAFE_GLOBAL_ACCESS(config[iZone]->SubtractFinestMesh();)
   }
 
+
   /*--- Set the current finest grid (full multigrid strategy) ---*/
 
   FinestMesh = config[iZone]->GetFinestMesh();
@@ -197,15 +198,14 @@ void CMultiGridIntegration::MultiGrid_Cycle(CGeometry ****geometry,
       /*--- Space integration ---*/
 
       Space_Integration(geometry_fine, solver_container_fine, numerics_fine, config, iMesh, iRKStep, RunTime_EqSystem);
-
+      
       /*--- Time integration, update solution using the old solution plus the solution increment ---*/
 
       Time_Integration(geometry_fine, solver_container_fine, config, iRKStep, RunTime_EqSystem);
-
+      
       /*--- Send-Receive boundary conditions, and postprocessing ---*/
 
       solver_fine->Postprocessing(geometry_fine, solver_container_fine, config, iMesh);
-
     }
 
   }
@@ -230,9 +230,7 @@ void CMultiGridIntegration::MultiGrid_Cycle(CGeometry ****geometry,
     /*--- Compute $r_k = P_k + F_k(u_k)$ ---*/
 
     solver_fine->Preprocessing(geometry_fine, solver_container_fine, config, iMesh, NO_RK_ITER, RunTime_EqSystem, false);
-
     Space_Integration(geometry_fine, solver_container_fine, numerics_fine, config, iMesh, NO_RK_ITER, RunTime_EqSystem);
-
     SetResidual_Term(geometry_fine, solver_fine);
 
     /*--- Compute $r_(k+1) = F_(k+1)(I^(k+1)_k u_k)$ ---*/

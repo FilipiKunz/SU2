@@ -62,6 +62,13 @@ protected:
   Inflow_Pressure_Total = 0.0,   /*!< \brief Fan face pressure for each boundary. */
   Inflow_Mach_Total = 0.0,       /*!< \brief Fan face mach number for each boundary. */
   InverseDesign = 0.0;           /*!< \brief Inverse design functional for each boundary. */
+  su2double
+  **TauWall_WMLES = nullptr,        /*!< \brief Wall shear stress for each boundary and vertex (WMLES). */
+  **HeatFlux_WMLES = nullptr,       /*!< \brief Heat transfer coefficient for each boundary and vertex (WMLES). */
+  ***FlowDirTan_WMLES = nullptr,    /*!< \brief Velocity unit tangent for each boundary and vertex (WMLES). */
+  ***VelTimeFilter_WMLES = nullptr; /*!< \brief Input time filter Velocity for each boundary and vertex (WMLES). */
+
+  
   vector<vector<unsigned long> > DonorGlobalIndex;  /*!< \brief Value of the donor global index. */
   vector<su2activematrix> DonorPrimVar;       /*!< \brief Value of the donor variables at each boundary. */
   vector<vector<su2double> > ActDisk_DeltaP;  /*!< \brief Value of the Delta P. */

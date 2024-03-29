@@ -395,14 +395,14 @@ protected:
   /*!
    * \brief Set the time averaged output fields.
    */
-  void SetTimeAveragedFields();
+  void SetTimeAveragedFields(CConfig *config);
 
   /*!
    * \brief Load the time averaged output fields.
    * \param iPoint
    * \param node_flow
    */
-  void LoadTimeAveragedData(unsigned long iPoint, const CVariable *node_flow);
+  void LoadTimeAveragedData(unsigned long iPoint, const CVariable *node_flow, CConfig *config);
 
   /*!
    * \brief Write additional output for fixed CL mode.

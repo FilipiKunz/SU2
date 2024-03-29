@@ -529,7 +529,7 @@ void CIncNSSolver::BC_ConjugateHeat_Interface(CGeometry *geometry, CSolver **sol
 
   /*--- Retrieve the specified wall function treatment.---*/
 
-  if (config->GetWallFunction_Treatment(Marker_Tag) != WALL_FUNCTIONS::NONE) {
+  if (config->GetWallFunction_Treatment(Marker_Tag) != WALL_FUNCTIONS::NO_WALL_FUNCTION) {
     SU2_MPI::Error("Wall function treatment not implemented yet.", CURRENT_FUNCTION);
   }
 
@@ -637,7 +637,7 @@ void CIncNSSolver::SetTau_Wall_WF(CGeometry *geometry, CSolver **solver_containe
 
     /*--- Jump to another BC if it is not wall function ---*/
 
-    if (config->GetWallFunction_Treatment(Marker_Tag) != WALL_FUNCTIONS::STANDARD_FUNCTION)
+    if (config->GetWallFunction_Treatment(Marker_Tag) != WALL_FUNCTIONS::STANDARD_WALL_FUNCTION)
       continue;
 
     /*--- Loop over all of the vertices on this boundary marker ---*/
