@@ -1292,9 +1292,9 @@ void CNSSolver::SetTau_Wall_WF(CGeometry *geometry, CSolver **solver_container, 
 
       unsigned long counter = 0;
       su2double diff = 1.0;
-      su2double U_Tau = max(1.0e-6,sqrt(WallShearStress/Density_Wall));
+      su2double U_Tau = sqrt(WallShearStress/Density_Wall); //max(1.0e-6,sqrt(WallShearStress/Density_Wall));
       /*--- Use minimum y+ as defined in the config, in case the routine below for computing y+ does not converge ---*/
-      su2double Y_Plus = 0.99*config->GetwallModel_MinYPlus(); // use clipping value as minimum
+      su2double Y_Plus = 0.0; //0.99*config->GetwallModel_MinYPlus(); // use clipping value as minimum
 
       const su2double Y_Plus_Start = Density_Wall * U_Tau * WallDistMod / Lam_Visc_Wall;
 
@@ -1306,7 +1306,7 @@ void CNSSolver::SetTau_Wall_WF(CGeometry *geometry, CSolver **solver_container, 
       }
 
       /*--- Convergence criterium for the Newton solver, note that 1e-10 is too large ---*/
-      const su2double tol = 1e-12;
+      const su2double tol = 1e-6;
       while (fabs(diff) > tol) {
 
         /*--- Friction velocity and u+ ---*/
@@ -1316,7 +1316,7 @@ void CNSSolver::SetTau_Wall_WF(CGeometry *geometry, CSolver **solver_container, 
         /*--- Gamma, Beta, Q, and Phi, defined by Nichols & Nelson (2004) page 1108 ---*/
 
         const su2double Gam  = Recovery*U_Tau*U_Tau/(2.0*Cp*T_Wall);
-        const su2double Beta = q_w*Lam_Visc_Wall/(Density_Wall*T_Wall*Conductivity_Wall*U_Tau);
+        const su2double Beta = 0; //q_w*Lam_Visc_Wall/(Density_Wall*T_Wall*Conductivity_Wall*U_Tau);
         const su2double Q    = sqrt(Beta*Beta + 4.0*Gam);
         const su2double Phi  = asin(-1.0*Beta/Q);
 
@@ -1370,7 +1370,7 @@ void CNSSolver::SetTau_Wall_WF(CGeometry *geometry, CSolver **solver_container, 
 
         /* --- Newton Step --- */
 
-        U_Tau = U_Tau - relax*(diff / grad_diff);
+        U_Tau = U_Tau - diff / grad_diff; // U_Tau - relax*(diff / grad_diff);
 
         counter++;
         if (counter > max_iter) {

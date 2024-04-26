@@ -1298,7 +1298,7 @@ void CConfig::SetConfig_Options() {
   /*!\brief WALLMODEL_MINYPLUS \n DESCRIPTION: lower limit for Y+ used for the wall model \n DEFAULT 5.0 \ingroup Config*/
   addDoubleOption("WALLMODEL_MINYPLUS", wallModel_MinYplus, 5.0);
   /*!\brief WALLMODEL_B \n DESCRIPTION: constant B used for the wall model \n DEFAULT 5.5 \ingroup Config*/
-  addDoubleOption("WALLMODEL_B", wallModel_B, 5.5);
+  addDoubleOption("WALLMODEL_B", wallModel_B, 5.0);
 
   /*!\brief BULK_MODULUS \n DESCRIPTION: Value of the Bulk Modulus  \n DEFAULT 1.42E5 \ingroup Config*/
   addDoubleOption("BULK_MODULUS", Bulk_Modulus, 1.42E5);
