@@ -1102,6 +1102,9 @@ void CConfig::SetConfig_Options() {
   addBoolOption("MULTIZONE", Multizone_Problem, NO);
   /*!\brief PHYSICAL_PROBLEM \n DESCRIPTION: Physical governing equations \n Options: see \link Solver_Map \endlink \n DEFAULT: NONE \ingroup Config*/
   addEnumOption("MULTIZONE_SOLVER", Kind_MZSolver, Multizone_Map, ENUM_MULTIZONE::MZ_BLOCK_GAUSS_SEIDEL);
+  /*!brief DEFAULT*/
+  addBoolOption("QUICK_SURF_OUT", quick_Sout, false);
+
 #ifdef CODI_REVERSE_TYPE
   const bool discAdjDefault = true;
 #else

@@ -181,5 +181,7 @@ protected:
    */
   bool CloseMPIFile();
 
+  virtual void Write_Data_serial(string val_filename, CConfig* config, CGeometry* geometry, OUTPUT_TYPE format) {}
+
 };
 

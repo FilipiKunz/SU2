@@ -929,6 +929,7 @@ private:
   su2double Cyclic_Pitch,         /*!< \brief Cyclic pitch for rotorcraft simulations. */
   Collective_Pitch;               /*!< \brief Collective pitch for rotorcraft simulations. */
   su2double Mach_Motion;          /*!< \brief Mach number based on mesh velocity and freestream quantities. */
+  bool quick_Sout; 
 
   su2double Motion_Origin[3] = {0.0}, /*!< \brief Mesh motion origin. */
   Translation_Rate[3] = {0.0},        /*!< \brief Translational velocity of the mesh. */
@@ -1417,6 +1418,11 @@ public:
    * \return MPI communicator of SU2.
    */
   SU2_MPI::Comm GetMPICommunicator() const;
+
+  /*
+    * \brief Get surface parallel writing boolean.
+  */
+  bool GetQuickSurfOut(void) const { return quick_Sout; }
 
   /*!
    * \brief Set the MPI communicator for SU2.

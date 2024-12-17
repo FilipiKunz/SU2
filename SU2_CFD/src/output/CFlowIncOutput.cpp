@@ -288,7 +288,7 @@ void CFlowIncOutput::SetVolumeOutputFields(CConfig *config){
 
   // Grid coordinates
   AddCoordinates();
-
+  
   // SOLUTION variables
   AddVolumeOutput("PRESSURE",   "Pressure",   "SOLUTION", "Pressure");
   AddVolumeOutput("VELOCITY-X", "Velocity_x", "SOLUTION", "x-component of the velocity vector");

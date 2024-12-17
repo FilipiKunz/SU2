@@ -61,6 +61,10 @@ void CMeshOutput::SetVolumeOutputFields(CConfig *config){
   AddVolumeOutput("ASPECT_RATIO",  "Aspect_Ratio",  "MESH_QUALITY", "CV Face Area Aspect Ratio");
   AddVolumeOutput("VOLUME_RATIO",  "Volume_Ratio",  "MESH_QUALITY", "CV Sub-Volume Ratio");
 
+  if (config->GetQuickSurfOut()){
+    AddVolumeOutput("GLOBAL_ID", "Global_id", "PRIMITIVE", "Global_id");
+  }
+
 }
 
 void CMeshOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
@@ -81,6 +85,10 @@ void CMeshOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){
 void CMeshOutput::LoadVolumeData(CConfig *config, CGeometry *geometry, CSolver **solver, unsigned long iPoint){
 
   CPoint*    Node_Geo  = geometry->nodes;
+
+  if (config->GetQuickSurfOut()){
+    SetVolumeOutputValue("GLOBAL_ID", iPoint, Node_Geo->GetGlobalIndex(iPoint));
+  }
 
   SetVolumeOutputValue("COORD-X", iPoint,  Node_Geo->GetCoord(iPoint, 0));
   SetVolumeOutputValue("COORD-Y", iPoint,  Node_Geo->GetCoord(iPoint, 1));
