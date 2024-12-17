@@ -427,8 +427,12 @@ void COutput::Load_Data(CGeometry *geometry, CConfig *config, CSolver** solver_c
   LoadDataIntoSorter(config, geometry, solver_container);
 
   /*--- Partition and sort the volume output data -- */
-
+  su2double startTime, stopTime;
+  startTime = SU2_MPI::Wtime();
   volumeDataSorter->SortOutputData();
+  stopTime = SU2_MPI::Wtime();
+  if (rank == MASTER_NODE) cout << " Time for Volume Sorting:" << stopTime - startTime << endl;
+  
 
 }
 
@@ -582,8 +586,7 @@ void COutput::WriteToFile(CConfig *config, CGeometry *geometry, OUTPUT_TYPE form
         filename_iter = config->GetFilename_Iter(fileName,curInnerIter, curOuterIter);
 
       /*--- Load and sort the output data and connectivity. ---*/
-
-      volumeDataSorter->SortConnectivity(config, geometry, true);
+      if (!config->GetQuickSurfOut()) volumeDataSorter->SortConnectivity(config, geometry, true);
 
       /*--- Write tecplot ascii ---*/
       if (rank == MASTER_NODE) {
@@ -816,10 +819,14 @@ void COutput::WriteToFile(CConfig *config, CGeometry *geometry, OUTPUT_TYPE form
 
 
       /*--- Load and sort the output data and connectivity. ---*/
-
-      surfaceDataSorter->SortConnectivity(config, geometry);
-      surfaceDataSorter->SortOutputData();
-
+      su2double startTime, stopTime;
+      startTime = SU2_MPI::Wtime();
+      if (!config->GetQuickSurfOut()) {
+        surfaceDataSorter->SortConnectivity(config, geometry);
+        surfaceDataSorter->SortOutputData();
+      }
+      stopTime = SU2_MPI::Wtime();
+      if (rank == MASTER_NODE) cout << " Time for Sorting:" << stopTime - startTime << endl;
       /*--- Write surface tecplot ascii ---*/
       if (rank == MASTER_NODE) {
         (*fileWritingTable) << "Tecplot ASCII surface" << fileName + extension;
@@ -828,9 +835,11 @@ void COutput::WriteToFile(CConfig *config, CGeometry *geometry, OUTPUT_TYPE form
           (*fileWritingTable) << "Tecplot ASCII surface + iter" << filename_iter + extension;
 
       }
-
-      fileWriter = new CTecplotFileWriter(surfaceDataSorter,
-                                          curTimeIter, GetHistoryFieldValue("TIME_STEP"));
+      if (config->GetQuickSurfOut()) {
+        fileWriter = new CTecplotFileWriter(volumeDataSorter, curTimeIter, GetHistoryFieldValue("TIME_STEP"));
+      } else {
+        fileWriter = new CTecplotFileWriter(surfaceDataSorter, curTimeIter, GetHistoryFieldValue("TIME_STEP"));
+      }
 
       break;
 
@@ -956,8 +965,13 @@ void COutput::WriteToFile(CConfig *config, CGeometry *geometry, OUTPUT_TYPE form
 
     /*--- Write data to file ---*/
 
-    fileWriter->Write_Data(fileName);
-
+    
+    if ((format == OUTPUT_TYPE::SURFACE_TECPLOT_ASCII || format == OUTPUT_TYPE::TECPLOT_ASCII) &&
+        config->GetQuickSurfOut()) {
+      fileWriter->Write_Data_serial(fileName,config,geometry,format);
+    } else {
+      fileWriter->Write_Data(fileName);
+    }
     su2double BandWidth = fileWriter->Get_Bandwidth();
 
     /*--- Write data with iteration number to file ---*/
@@ -1016,7 +1030,22 @@ bool COutput::SetResult_Files(CGeometry *geometry, CConfig *config, CSolver** so
     /*--- Collect the volume data from the solvers.
      *  If time-domain is enabled, we also load the data although we don't output it,
      *  since we might want to do time-averaging. ---*/
-    const bool write_file = WriteVolume_Output(config, iter, force_writing || cauchyTimeConverged, iFile);
+    if (rank == MASTER_NODE) {
+      //cout << "Before using WriteVolume_Output " << force_writing << " " << config->GetTime_Domain() << endl;
+    }
+    bool write_file = WriteVolume_Output(config, iter, force_writing || cauchyTimeConverged, iFile);
+    if (rank == MASTER_NODE) {
+      //cout << "write_file: " << write_file << endl;
+    }
+    if (rank == MASTER_NODE) {
+      //cout << "wnd conv iter: " << config->GetWnd_StartConv_Iter() << endl;
+    }
+    bool new_condition =
+        ((iter % config->GetVolumeOutputFrequency(iFile) == 0) && (iter > config->GetWnd_StartConv_Iter()));
+
+    if (rank == MASTER_NODE) {
+      //cout << "write_file new: " << new_condition << endl;
+    }
 
     if ((write_file || config->GetTime_Domain()) && !dataIsLoaded) {
       LoadDataIntoSorter(config, geometry, solver_container);
@@ -1025,8 +1054,15 @@ bool COutput::SetResult_Files(CGeometry *geometry, CConfig *config, CSolver** so
     if (!write_file) continue;
 
     /*--- Partition and sort the data --- */
-
-    volumeDataSorter->SortOutputData();
+    su2double startTime, stopTime;
+    startTime = SU2_MPI::Wtime();
+    if (config->GetQuickSurfOut() && (VolumeFiles[iFile] == OUTPUT_TYPE::SURFACE_TECPLOT_ASCII ||
+                                      VolumeFiles[iFile] == OUTPUT_TYPE::TECPLOT_ASCII)) {
+    } else {
+      volumeDataSorter->SortOutputData();
+    }
+    stopTime = SU2_MPI::Wtime();
+    if (rank == MASTER_NODE) cout << " Time for Volume Sorting:" << stopTime - startTime << endl;
 
     if (rank == MASTER_NODE && !isFileWrite) {
       fileWritingTable->SetAlign(PrintingToolbox::CTablePrinter::CENTER);
@@ -2029,7 +2065,7 @@ void COutput::LoadDataIntoSorter(CConfig* config, CGeometry* geometry, CSolver**
 
       /*--- We only want to have surface values on solid walls ---*/
 
-      if (config->GetSolid_Wall(iMarker)){
+      if (config->GetSolid_Wall(iMarker) || config->GetMarker_All_KindBC(iMarker) == FLUID_INTERFACE) { //LUCAPERMEABLE
         for (iVertex = 0; iVertex < geometry->GetnVertex(iMarker); iVertex++){
 
           iPoint = geometry->vertex[iMarker][iVertex]->GetNode();

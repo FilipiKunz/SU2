@@ -60,5 +60,11 @@ public:
    */
   void Write_Data(string val_filename) override;
 
+  /*!
+   * \brief Write sorted data to file in Tecplot ASCII format in serial.
+   */
+  void Write_Data_serial(string val_filename, CConfig* config,
+                         CGeometry* geometry, OUTPUT_TYPE format);
+
 };
 

@@ -26,7 +26,8 @@
  */
 
 #include "../../../include/output/filewriter/CTecplotFileWriter.hpp"
-
+#include "../../../Common/include/geometry/CGeometry.hpp"
+#include <string>
 const string CTecplotFileWriter::fileExt = ".dat";
 
 CTecplotFileWriter::CTecplotFileWriter(CParallelDataSorter *valDataSorter,
@@ -216,9 +217,8 @@ void CTecplotFileWriter::Write_Data(string val_filename){
   /*--- Compute and store the write time. ---*/
 
   stopTime = SU2_MPI::Wtime();
-
   usedTime = stopTime-startTime;
-
+  if (rank == MASTER_NODE) cout << "rank" << rank << " used Time for writing:" << usedTime << endl;
   fileSize = Determine_Filesize(val_filename);
 
   /*--- Compute and store the bandwidth ---*/
@@ -226,4 +226,86 @@ void CTecplotFileWriter::Write_Data(string val_filename){
   bandwidth = fileSize/(1.0e6)/usedTime;
 }
 
+void CTecplotFileWriter::Write_Data_serial(string val_filename, CConfig* config, CGeometry* geometry,
+                                           OUTPUT_TYPE format) {
+  /*--- We append the pre-defined suffix (extension) to the filename (prefix) ---*/
+  val_filename.append("_" + std::to_string(rank));
+  val_filename.append(fileExt);
+  
+  const vector<string> fieldNames = dataSorter->GetFieldNames();
 
+  unsigned short iVar;
+
+  unsigned long iPoint, iMarker,iVertex;
+
+  ofstream Tecplot_File;
+
+  fileSize = 0.0;
+
+  /*--- Set a timer for the file writing. ---*/
+
+  startTime = SU2_MPI::Wtime();
+  //dataSorter->SetGlobalFieldCounter(fieldNames.size());
+  /*--- Open Tecplot ASCII file and write the header. ---*/
+  unsigned long corepoints;
+  //dataSorter->GetnPoints() > 0
+  if (true) {
+    Tecplot_File.open(val_filename.c_str(), ios::out);
+    Tecplot_File.precision(6);
+    Tecplot_File << "TITLE = \"Visualization of the solution\"" << endl;
+
+    Tecplot_File << "VARIABLES = ";
+    for (iVar = 0; iVar < fieldNames.size() - 1; iVar++) {
+      Tecplot_File << "\"" << fieldNames[iVar] << "\",";
+    }
+    Tecplot_File << "\"" << fieldNames[fieldNames.size() - 1] << "\"" << endl;
+    Tecplot_File.flush();
+
+    /*--- Write surface and volumetric solution data. ---*/
+
+    corepoints = 0.0;
+    if (format == OUTPUT_TYPE::SURFACE_TECPLOT_ASCII) {
+      /*--- Write the node data---*/
+      for (unsigned short iMarker = 0; iMarker < config->GetnMarker_All(); iMarker++) {
+        /*--- We only want to have surface values on solid walls ---*/
+
+        if (config->GetSolid_Wall(iMarker)) {  // LUCAPERMEABLE
+          for (iVertex = 0; iVertex < geometry->GetnVertex(iMarker); iVertex++) {
+            iPoint = geometry->vertex[iMarker][iVertex]->GetNode();
+
+            /*--- Load the surface data into the data sorter. --- */
+            if (geometry->nodes->GetDomain(iPoint)) {
+              for (iVar = 0; iVar < fieldNames.size(); iVar++)
+                Tecplot_File << scientific << dataSorter->GetUnsorted_Data(iPoint, iVar) << "\t";
+              Tecplot_File << endl;
+              corepoints++;
+            }
+          }
+        }
+      }
+    } else {
+      for (iPoint = 0; iPoint < geometry->GetnPointDomain(); iPoint++) {
+        for (iVar = 0; iVar < fieldNames.size(); iVar++)
+          Tecplot_File << scientific << dataSorter->GetUnsorted_Data(iPoint, iVar) << "\t";
+        Tecplot_File << endl;
+      }
+     }
+  }
+  Tecplot_File << scientific << corepoints << endl;
+    Tecplot_File.flush();
+    Tecplot_File.close();
+  
+  /*--- Compute and store the write time. ---*/
+
+  stopTime = SU2_MPI::Wtime();
+
+  usedTime = stopTime - startTime;
+  //if (dataSorter->GetnPoints() > 0)
+   cout << "rank" << rank << " used Time for writing:" << usedTime << endl;
+
+  fileSize = Determine_Filesize(val_filename);
+
+  /*--- Compute and store the bandwidth ---*/
+
+  bandwidth = fileSize / (1.0e6) / usedTime;
+}

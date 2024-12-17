@@ -137,6 +137,8 @@ public:
    */
   su2double Get_UsedTime() const {return usedTime;}
 
+  virtual void Write_Data_serial(string val_filename, CConfig* config, CGeometry* geometry, OUTPUT_TYPE format) {}
+
 protected:
 
   /*!
@@ -180,8 +182,6 @@ protected:
    * \return Boolean indicating whether the closing was successful.
    */
   bool CloseMPIFile();
-
-  virtual void Write_Data_serial(string val_filename, CConfig* config, CGeometry* geometry, OUTPUT_TYPE format) {}
 
 };
 
