@@ -304,6 +304,8 @@ void CFlowCompOutput::SetVolumeOutputFields(CConfig *config){
   if (nDim == 3) AddVolumeOutput("NORMAL-Z", "Normal_z", "NORMALS", "Surface normals");
   AddVolumeOutput("AREA", "Area", "NORMALS", "Surface normals");
 
+  AddVolumeOutput("GLOBAL_ID", "Global_id", "PRIMITIVE", "Global_id");
+
 }
 
 void CFlowCompOutput::SetProbeOutputFields(CConfig *config, unsigned int nProbe){

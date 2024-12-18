@@ -1290,6 +1290,9 @@ void CFlowOutput::LoadVolumeData_Scalar(const CConfig* config, const CSolver* co
         SetVolumeOutputValue("LIMITER_SPECIES_" + std::to_string(iVar), iPoint, Node_Species->GetLimiter(iPoint, iVar));
     }
   }
+
+  SetVolumeOutputValue("GLOBAL_ID", iPoint, Node_Geo->GetGlobalIndex(iPoint));
+
 }
 
 void CFlowOutput::LoadProbeData_Scalar(const CConfig* config, const CSolver* const* solver, CGeometry* geometry) {
@@ -1406,6 +1409,8 @@ void CFlowOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver 
 
   if (!config->GetViscous_Wall(iMarker)) return;
 
+  CPoint*    Node_Geo  = geometry->nodes;
+
   const auto heat_sol = (config->GetKind_Regime() == ENUM_REGIME::INCOMPRESSIBLE) &&
                          config->GetWeakly_Coupled_Heat() ? HEAT_SOL : FLOW_SOL;
 
@@ -1433,7 +1438,11 @@ void CFlowOutput::LoadSurfaceData(CConfig *config, CGeometry *geometry, CSolver 
   SetVolumeOutputValue("NORMAL-Y", iPoint, normal[1]);
   if (nDim == 3) SetVolumeOutputValue("NORMAL-Z", iPoint, normal[2]);
   SetVolumeOutputValue("AREA", iPoint, Area);
-  
+
+  //if (config->GetQuickSurfOut()){
+  SetVolumeOutputValue("GLOBAL_ID", iPoint, Node_Geo->GetGlobalIndex(iPoint));
+  //}
+
   delete normal;
 }
 
