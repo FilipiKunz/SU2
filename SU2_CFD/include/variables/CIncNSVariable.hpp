@@ -133,4 +133,8 @@ public:
    */
   inline su2double GetDES_LengthScale(unsigned long iPoint) const override { return DES_LengthScale(iPoint); }
 
+  inline su2double GetEddyViscosityGradient(unsigned long iPoint,
+                                            unsigned long iDim) const override {
+    return Gradient_Primitive(iPoint, indices.EddyViscosity(), iDim);
+  }
 };

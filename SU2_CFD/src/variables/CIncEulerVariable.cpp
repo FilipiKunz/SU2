@@ -29,9 +29,13 @@
 #include "../../include/fluid/CFluidModel.hpp"
 
 CIncEulerVariable::CIncEulerVariable(su2double pressure, const su2double *velocity, su2double enthalpy,
-                                     unsigned long npoint, unsigned long ndim, unsigned long nvar, const CConfig *config)
+                                     unsigned long npoint, unsigned long ndim, unsigned long nvar,
+                                     const CConfig *config)
   : CFlowVariable(npoint, ndim, nvar, ndim + 10,
-                  ndim + (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED ? 2 : 4), config),
+                  std::max<unsigned long>(
+                    ndim + (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED ? 2 : 4),
+                    ndim + 7),
+                  config),
     indices(ndim, 0) {
 
   const bool dual_time = (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_1ST) ||

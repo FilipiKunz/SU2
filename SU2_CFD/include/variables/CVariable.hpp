@@ -2371,4 +2371,9 @@ public:
 
   inline virtual const su2double *GetScalarSources(unsigned long iPoint) const { return nullptr; }
   inline virtual const su2double *GetScalarLookups(unsigned long iPoint) const { return nullptr; }
+
+  inline virtual su2double GetEddyViscosityGradient(unsigned long iPoint,
+                                                    unsigned long iDim) const {
+    return 0.0;
+  }
 };

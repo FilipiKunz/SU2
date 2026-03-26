@@ -111,6 +111,11 @@ public:
     return Primitive(iPoint, indices.EddyViscosity());
   }
 
+  inline su2double GetEddyViscosityGradient(unsigned long iPoint,
+                                            unsigned long iDim) const override {
+    return Gradient_Primitive(iPoint, indices.EddyViscosity(), iDim);
+  }
+
   /*!
    * \brief Get the specific heat at constant P of the flow.
    * \return Value of the specific heat at constant P  of the flow.

@@ -85,20 +85,22 @@ void CNSSolver::Preprocessing(CGeometry *geometry, CSolver **solver_container, C
    turbulence solver, and post) only temperature and velocity are needed ---*/
 
   const auto nPrimVarGrad_bak = nPrimVarGrad;
-  if (Output) ompMasterAssignBarrier(nPrimVarGrad, 1+nDim);
+
+  if (Output) ompMasterAssignBarrier(nPrimVarGrad, nDim + 7);
 
   if (config->GetReconstructionGradientRequired() && muscl && !center) {
     switch (config->GetKind_Gradient_Method_Recon()) {
       case GREEN_GAUSS:
-        SetPrimitive_Gradient_GG(geometry, config, true); break;
+        SetPrimitive_Gradient_GG(geometry, config, true);
+        break;
       case LEAST_SQUARES:
       case WEIGHTED_LEAST_SQUARES:
-        SetPrimitive_Gradient_LS(geometry, config, true); break;
-      default: break;
+        SetPrimitive_Gradient_LS(geometry, config, true);
+        break;
+      default:
+        break;
     }
   }
-
-  /*--- Compute gradient of the primitive variables ---*/
 
   if (config->GetKind_Gradient_Method() == GREEN_GAUSS) {
     SetPrimitive_Gradient_GG(geometry, config);

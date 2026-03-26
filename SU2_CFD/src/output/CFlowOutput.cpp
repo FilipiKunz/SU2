@@ -1470,7 +1470,8 @@ void CFlowOutput::SetVolumeOutputFieldsScalarPrimitive(const CConfig* config) {
   switch (config->GetKind_Species_Model()) {
     case SPECIES_MODEL::SPECIES_TRANSPORT:
       for (unsigned short iVar = 0; iVar < config->GetnSpecies(); iVar++){
-        AddVolumeOutput("DIFFUSIVITY_" + std::to_string(iVar), "Diffusivity_" + std::to_string(iVar), "PRIMITIVE", "Diffusivity of the transported species " + std::to_string(iVar));
+        AddVolumeOutput("DIFFUSIVITY_" + std::to_string(iVar), "Diffusivity_" + std::to_string(iVar),
+                        "PRIMITIVE", "Diffusivity of the transported species " + std::to_string(iVar));
       }
       break;
     default:
@@ -1492,6 +1493,34 @@ void CFlowOutput::SetVolumeOutputFieldsScalarPrimitive(const CConfig* config) {
     AddVolumeOutput("EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
   }
 
+  if (config->GetViscous()) {
+    AddVolumeOutput("DVELX_DX", "dVelX_dx", "VELOCITY_GRADIENT", "du/dx");
+    AddVolumeOutput("DVELX_DY", "dVelX_dy", "VELOCITY_GRADIENT", "du/dy");
+    AddVolumeOutput("DVELY_DX", "dVelY_dx", "VELOCITY_GRADIENT", "dv/dx");
+    AddVolumeOutput("DVELY_DY", "dVelY_dy", "VELOCITY_GRADIENT", "dv/dy");
+
+    if (nDim == 3) {
+      AddVolumeOutput("DVELX_DZ", "dVelX_dz", "VELOCITY_GRADIENT", "du/dz");
+      AddVolumeOutput("DVELY_DZ", "dVelY_dz", "VELOCITY_GRADIENT", "dv/dz");
+      AddVolumeOutput("DVELZ_DX", "dVelZ_dx", "VELOCITY_GRADIENT", "dw/dx");
+      AddVolumeOutput("DVELZ_DY", "dVelZ_dy", "VELOCITY_GRADIENT", "dw/dy");
+      AddVolumeOutput("DVELZ_DZ", "dVelZ_dz", "VELOCITY_GRADIENT", "dw/dz");
+    }
+  }
+
+  if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) {
+    AddVolumeOutput("EDDY_VISCOSITY", "Eddy_Viscosity", "PRIMITIVE", "Turbulent eddy viscosity");
+
+    AddVolumeOutput("EDDY_VISCOSITY_GRAD_X", "Grad_Eddy_Viscosity_x",
+                    "EDDY_VISCOSITY_GRADIENT", "x-component of eddy-viscosity gradient");
+    AddVolumeOutput("EDDY_VISCOSITY_GRAD_Y", "Grad_Eddy_Viscosity_y",
+                    "EDDY_VISCOSITY_GRADIENT", "y-component of eddy-viscosity gradient");
+
+    if (nDim == 3) {
+      AddVolumeOutput("EDDY_VISCOSITY_GRAD_Z", "Grad_Eddy_Viscosity_z",
+                      "EDDY_VISCOSITY_GRADIENT", "z-component of eddy-viscosity gradient");
+    }
+  }
 }
 
 void CFlowOutput::SetVolumeOutputFieldsScalarSource(const CConfig* config) {
@@ -1574,8 +1603,8 @@ void CFlowOutput::SetVolumeOutputFieldsScalarMisc(const CConfig* config) {
   }
 }
 
-void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* const* solver, const CGeometry* geometry,
-                                        const unsigned long iPoint) {
+void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* const* solver,
+                                       const CGeometry* geometry, const unsigned long iPoint) {
   const auto* turb_solver = solver[TURB_SOL];
   const auto* trans_solver = solver[TRANS_SOL];
   const auto* Node_Flow = solver[FLOW_SOL]->GetNodes();
@@ -1587,14 +1616,30 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
   SetVolumeOutputValue("CFL", iPoint, Node_Flow->GetLocalCFL(iPoint));
 
   if (config->GetViscous()) {
-    if (nDim == 3){
+    if (nDim == 3) {
       SetVolumeOutputValue("VORTICITY_X", iPoint, Node_Flow->GetVorticity(iPoint)[0]);
       SetVolumeOutputValue("VORTICITY_Y", iPoint, Node_Flow->GetVorticity(iPoint)[1]);
       SetVolumeOutputValue("VORTICITY_Z", iPoint, Node_Flow->GetVorticity(iPoint)[2]);
     } else {
       SetVolumeOutputValue("VORTICITY", iPoint, Node_Flow->GetVorticity(iPoint)[2]);
     }
+
     SetVolumeOutputValue("Q_CRITERION", iPoint, GetQCriterion(Node_Flow->GetVelocityGradient(iPoint)));
+
+    const auto grad_vel = Node_Flow->GetVelocityGradient(iPoint);
+
+    SetVolumeOutputValue("DVELX_DX", iPoint, grad_vel[0][0]);
+    SetVolumeOutputValue("DVELX_DY", iPoint, grad_vel[0][1]);
+    SetVolumeOutputValue("DVELY_DX", iPoint, grad_vel[1][0]);
+    SetVolumeOutputValue("DVELY_DY", iPoint, grad_vel[1][1]);
+
+    if (nDim == 3) {
+      SetVolumeOutputValue("DVELX_DZ", iPoint, grad_vel[0][2]);
+      SetVolumeOutputValue("DVELY_DZ", iPoint, grad_vel[1][2]);
+      SetVolumeOutputValue("DVELZ_DX", iPoint, grad_vel[2][0]);
+      SetVolumeOutputValue("DVELZ_DY", iPoint, grad_vel[2][1]);
+      SetVolumeOutputValue("DVELZ_DZ", iPoint, grad_vel[2][2]);
+    }
   }
 
   const bool limiter = (config->GetKind_SlopeLimit_Turb() != LIMITER::NONE);
@@ -1619,14 +1664,24 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
       }
       break;
 
-    case TURB_FAMILY::NONE: break;
+    case TURB_FAMILY::NONE:
+      break;
   }
 
-  /*--- If we got here a turbulence model is being used, therefore there is eddy viscosity. ---*/
   if (config->GetKind_Turb_Model() != TURB_MODEL::NONE) {
     SetVolumeOutputValue("EDDY_VISCOSITY", iPoint, Node_Flow->GetEddyViscosity(iPoint));
     SetVolumeOutputValue("TURB_DELTA_TIME", iPoint, Node_Turb->GetDelta_Time(iPoint));
     SetVolumeOutputValue("TURB_CFL", iPoint, Node_Turb->GetLocalCFL(iPoint));
+
+    SetVolumeOutputValue("EDDY_VISCOSITY_GRAD_X", iPoint,
+                         Node_Flow->GetEddyViscosityGradient(iPoint, 0));
+    SetVolumeOutputValue("EDDY_VISCOSITY_GRAD_Y", iPoint,
+                         Node_Flow->GetEddyViscosityGradient(iPoint, 1));
+
+    if (nDim == 3) {
+      SetVolumeOutputValue("EDDY_VISCOSITY_GRAD_Z", iPoint,
+                           Node_Flow->GetEddyViscosityGradient(iPoint, 2));
+    }
   }
 
   if (config->GetSAParsedOptions().bc) {
@@ -1644,7 +1699,8 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
       SetVolumeOutputValue("RES_RE_THETA_T", iPoint, trans_solver->LinSysRes(iPoint, 1));
       break;
 
-    case TURB_TRANS_MODEL::NONE: break;
+    case TURB_TRANS_MODEL::NONE:
+      break;
   }
 
   if (config->GetKind_HybridRANSLES() != NO_HYBRIDRANSLES) {
@@ -1659,10 +1715,10 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
       for (unsigned long iVar = 0; iVar < config->GetnSpecies(); iVar++) {
         SetVolumeOutputValue("SPECIES_" + std::to_string(iVar), iPoint, Node_Species->GetSolution(iPoint, iVar));
         SetVolumeOutputValue("RES_SPECIES_" + std::to_string(iVar), iPoint, solver[SPECIES_SOL]->LinSysRes(iPoint, iVar));
-        SetVolumeOutputValue("DIFFUSIVITY_"+ std::to_string(iVar), iPoint, Node_Species->GetDiffusivity(iPoint,iVar));
+        SetVolumeOutputValue("DIFFUSIVITY_" + std::to_string(iVar), iPoint, Node_Species->GetDiffusivity(iPoint, iVar));
         if (config->GetKind_SlopeLimit_Species() != LIMITER::NONE)
           SetVolumeOutputValue("LIMITER_SPECIES_" + std::to_string(iVar), iPoint, Node_Species->GetLimiter(iPoint, iVar));
-        if (config->GetPyCustomSource()){
+        if (config->GetPyCustomSource()) {
           SetVolumeOutputValue("SPECIES_UDS_" + std::to_string(iVar), iPoint, Node_Species->GetUserDefinedSource()(iPoint, iVar));
         }
       }
@@ -1672,8 +1728,8 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
     case SPECIES_MODEL::FLAMELET: {
       const auto Node_Species = solver[SPECIES_SOL]->GetNodes();
       const auto& flamelet_config_options = config->GetFlameletParsedOptions();
-      /*--- Controlling variables transport equations. ---*/
-      for (auto iCV=0u; iCV < flamelet_config_options.n_control_vars; iCV++) {
+
+      for (auto iCV = 0u; iCV < flamelet_config_options.n_control_vars; iCV++) {
         const auto& cv_name = flamelet_config_options.controlling_variable_names[iCV];
         SetVolumeOutputValue(cv_name, iPoint, Node_Species->GetSolution(iPoint, iCV));
         SetVolumeOutputValue("RES_" + cv_name, iPoint, solver[SPECIES_SOL]->LinSysRes(iPoint, iCV));
@@ -1681,38 +1737,42 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
         if (source_name.compare("NULL") != 0)
           SetVolumeOutputValue("SOURCE_" + cv_name, iPoint, Node_Species->GetScalarSources(iPoint)[iCV]);
       }
-      /*--- auxiliary species transport equations ---*/
-      for (unsigned short i_scalar=0; i_scalar<flamelet_config_options.n_user_scalars; i_scalar++) {
+
+      for (unsigned short i_scalar = 0; i_scalar < flamelet_config_options.n_user_scalars; i_scalar++) {
         const auto& scalar_name = flamelet_config_options.user_scalar_names[i_scalar];
-        SetVolumeOutputValue(scalar_name, iPoint, Node_Species->GetSolution(iPoint, flamelet_config_options.n_control_vars + i_scalar));
-        SetVolumeOutputValue("SOURCE_" + scalar_name, iPoint, Node_Species->GetScalarSources(iPoint)[flamelet_config_options.n_control_vars + i_scalar]);
-        SetVolumeOutputValue("RES_" + scalar_name, iPoint, solver[SPECIES_SOL]->LinSysRes(iPoint, flamelet_config_options.n_control_vars + i_scalar));
+        SetVolumeOutputValue(scalar_name, iPoint,
+                             Node_Species->GetSolution(iPoint, flamelet_config_options.n_control_vars + i_scalar));
+        SetVolumeOutputValue("SOURCE_" + scalar_name, iPoint,
+                             Node_Species->GetScalarSources(iPoint)[flamelet_config_options.n_control_vars + i_scalar]);
+        SetVolumeOutputValue("RES_" + scalar_name, iPoint,
+                             solver[SPECIES_SOL]->LinSysRes(iPoint, flamelet_config_options.n_control_vars + i_scalar));
       }
 
       if (config->GetKind_SlopeLimit_Species() != LIMITER::NONE) {
-        /*--- Limiter for controlling variable transport equations. ---*/
-        for (auto iCV=0u; iCV<flamelet_config_options.n_control_vars; iCV++) {
+        for (auto iCV = 0u; iCV < flamelet_config_options.n_control_vars; iCV++) {
           const auto& cv_name = flamelet_config_options.controlling_variable_names[iCV];
           SetVolumeOutputValue("LIMITER_" + cv_name, iPoint, Node_Species->GetLimiter(iPoint, iCV));
         }
-        /*--- limiter for auxiliary species transport equations ---*/
-        for (unsigned short i_scalar=0; i_scalar<flamelet_config_options.n_user_scalars; i_scalar++) {
+
+        for (unsigned short i_scalar = 0; i_scalar < flamelet_config_options.n_user_scalars; i_scalar++) {
           const auto& scalar_name = flamelet_config_options.user_scalar_names[i_scalar];
-          SetVolumeOutputValue("LIMITER_" + scalar_name, iPoint, Node_Species->GetLimiter(iPoint, flamelet_config_options.n_control_vars + i_scalar));
+          SetVolumeOutputValue("LIMITER_" + scalar_name, iPoint,
+                               Node_Species->GetLimiter(iPoint, flamelet_config_options.n_control_vars + i_scalar));
         }
       }
 
-      /*--- variables that we look up from the LUT ---*/
       for (int i_lookup = 0; i_lookup < flamelet_config_options.n_lookups; ++i_lookup) {
-        if (flamelet_config_options.lookup_names[i_lookup] !="NULL")
-          SetVolumeOutputValue(flamelet_config_options.lookup_names[i_lookup], iPoint, Node_Species->GetScalarLookups(iPoint)[i_lookup]);
+        if (flamelet_config_options.lookup_names[i_lookup] != "NULL")
+          SetVolumeOutputValue(flamelet_config_options.lookup_names[i_lookup], iPoint,
+                               Node_Species->GetScalarLookups(iPoint)[i_lookup]);
       }
 
       SetVolumeOutputValue("TABLE_MISSES", iPoint, Node_Species->GetTableMisses(iPoint));
-
+      break;
     }
-    break;
-    case SPECIES_MODEL::NONE: break;
+
+    case SPECIES_MODEL::NONE:
+      break;
   }
 }
 

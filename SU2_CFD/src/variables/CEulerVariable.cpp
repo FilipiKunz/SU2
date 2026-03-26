@@ -29,16 +29,25 @@
 #include "../../include/fluid/CFluidModel.hpp"
 
 unsigned long EulerNPrimVarGrad(const CConfig *config, unsigned long ndim) {
-  if (config->GetContinuous_Adjoint()) return ndim + 4;
-  if (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED) return ndim + 1;
+  unsigned long nPrimVarGrad = 0;
 
-  const bool ideal_gas = config->GetKind_FluidModel() == STANDARD_AIR ||
-                         config->GetKind_FluidModel() == IDEAL_GAS;
-  if (ideal_gas && config->GetKind_Upwind_Flow() == UPWIND::ROE && !config->Low_Mach_Correction()) {
-    // Based on CRoeBase (numerics_simd).
-    return ndim + 2;
+  if (config->GetContinuous_Adjoint()) {
+    nPrimVarGrad = ndim + 4;
+  } else if (config->GetKind_ConvNumScheme_Flow() == SPACE_CENTERED) {
+    nPrimVarGrad = ndim + 1;
+  } else {
+    const bool ideal_gas = config->GetKind_FluidModel() == STANDARD_AIR ||
+                           config->GetKind_FluidModel() == IDEAL_GAS;
+
+    if (ideal_gas && config->GetKind_Upwind_Flow() == UPWIND::ROE &&
+        !config->Low_Mach_Correction()) {
+      nPrimVarGrad = ndim + 2;
+    } else {
+      nPrimVarGrad = ndim + 4;
+    }
   }
-  return ndim + 4;
+
+  return std::max<unsigned long>(nPrimVarGrad, ndim + 7);
 }
 
 CEulerVariable::CEulerVariable(su2double density, const su2double *velocity, su2double energy, unsigned long npoint,
