@@ -976,13 +976,17 @@ public:
     for (unsigned short v=0; v<6; ++v)
       residual[v]=s.rho*t.stressSource[p[v]][q[v]]*Volume;
     residual[6]=s.rho*t.omegaSource*Volume;
-    // Sink-only point Jacobian, as in SU2's SST source. Full cross-coupling
-    // remains explicit; the conservative flow block Jacobian is unchanged.
+    // SU2 advances rho*Rij and rho*omega. With rho frozen in the turbulence
+    // block, d(rho*S)/d(rho*q) = dS/dq: no extra rho belongs in this Jacobian.
+    // As in SU2's SST implementation, keep production and redistribution
+    // explicit and implicitize only the local destruction terms. The full
+    // local source Jacobian was tested on NACA 0012 at 15 degrees and gave
+    // a growing nonlinear residual from a uniform start.
     const double C1=t.F1*1.8+(1.0-t.F1)*1.7;
     const double beta=t.F1*0.075+(1.0-t.F1)*0.0828;
     for (unsigned short v=0; v<6; ++v)
-      jac[v][v]=-s.rho*C1*0.09*s.omega*Volume;
-    jac[6][6]=-2.0*s.rho*beta*s.omega*Volume;
+      jac[v][v]=-C1*0.09*s.omega*Volume;
+    jac[6][6]=-2.0*beta*s.omega*Volume;
     return ResidualType<>(residual,jac,nullptr);
   }
 };
