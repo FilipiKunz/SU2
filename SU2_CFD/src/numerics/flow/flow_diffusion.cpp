@@ -680,7 +680,11 @@ CNumerics::ResidualType<> CAvgGradInc_Flow::ComputeResidual(const CConfig* confi
     } else {
 
       const su2double dist_ij = sqrt(dist_ij_2);
-      SetIncTauJacobian(Mean_Laminar_Viscosity, Mean_Eddy_Viscosity, dist_ij, UnitNormal);
+      // The transported Reynolds stress is frozen in the flow block. Only
+      // molecular viscosity contributes to the velocity Jacobian.
+      SetIncTauJacobian(Mean_Laminar_Viscosity,
+                        useTransportedRSM ? 0.0 : Mean_Eddy_Viscosity,
+                        dist_ij, UnitNormal);
 
       GetViscousIncProjJacs(Area, Jacobian_i, Jacobian_j);
 

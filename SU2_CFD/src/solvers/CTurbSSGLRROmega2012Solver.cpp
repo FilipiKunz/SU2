@@ -400,14 +400,14 @@ void CTurbSSGLRROmega2012Solver::BC_Inlet(CGeometry *geometry, CSolver **solver_
           Density_Inlet = V_inlet[prim_idx.Density()];
           FluidModel->SetTDState_Prho(V_inlet[prim_idx.Pressure()], Density_Inlet);
         } else {
-          const su2double* Scalar_Inlet = nullptr;
-          if (config->GetKind_Species_Model() != SPECIES_MODEL::NONE) {
-            Scalar_Inlet = config->GetInlet_SpeciesVal(config->GetMarker_All_TagBound(val_marker));
-          }
-          FluidModel->SetTDState_T(V_inlet[prim_idx.Temperature()], Scalar_Inlet);
-          Density_Inlet = FluidModel->GetDensity();
+          Density_Inlet = V_inlet[prim_idx.Density()];
         }
-        const su2double Laminar_Viscosity_Inlet = FluidModel->GetLaminarViscosity();
+        // The incompressible flow node stores dynamic viscosity in solver
+        // units; its fluid model may use dimensional thermodynamic inputs.
+        const su2double Laminar_Viscosity_Inlet =
+            config->GetKind_Regime() == ENUM_REGIME::INCOMPRESSIBLE
+              ? solver_container[FLOW_SOL]->GetNodes()->GetLaminarViscosity(iPoint)
+              : FluidModel->GetLaminarViscosity();
         const su2double* Turb_Properties = config->GetInlet_TurbVal(config->GetMarker_All_TagBound(val_marker));
         const su2double Intensity = Turb_Properties[0];
         const su2double viscRatio = Turb_Properties[1];

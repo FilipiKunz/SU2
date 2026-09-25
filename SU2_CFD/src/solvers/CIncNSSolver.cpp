@@ -377,6 +377,10 @@ unsigned long CIncNSSolver::SetPrimitive_Variables(CSolver **solver_container, c
     if (turb_model != TURB_MODEL::NONE && solver_container[TURB_SOL] != nullptr) {
       eddy_visc = solver_container[TURB_SOL]->GetNodes()->GetmuT(iPoint);
       if (tkeNeeded) turb_ke = solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0);
+      else if (turb_model == TURB_MODEL::SSGLRR_OMEGA2012) {
+        const auto* rsm = solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint);
+        turb_ke = 0.5*(rsm[0]+rsm[1]+rsm[2]);
+      }
 
       if (config->GetKind_HybridRANSLES() != NO_HYBRIDRANSLES){
         DES_LengthScale = solver_container[TURB_SOL]->GetNodes()->GetDES_LengthScale(iPoint);
