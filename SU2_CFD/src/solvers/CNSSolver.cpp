@@ -134,7 +134,6 @@ unsigned long CNSSolver::SetPrimitive_Variables(CSolver **solver_container, cons
   unsigned long nonPhysicalPoints = 0;
 
   const TURB_MODEL turb_model = config->GetKind_Turb_Model();
-  const bool tkeNeeded = (turb_model == TURB_MODEL::SST);
 
   AD::StartNoSharedReading();
 
@@ -147,7 +146,12 @@ unsigned long CNSSolver::SetPrimitive_Variables(CSolver **solver_container, cons
 
     if (turb_model != TURB_MODEL::NONE && solver_container[TURB_SOL] != nullptr) {
       eddy_visc = solver_container[TURB_SOL]->GetNodes()->GetmuT(iPoint);
-      if (tkeNeeded) turb_ke = solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0);
+      if (turb_model == TURB_MODEL::SST)
+        turb_ke = solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0);
+      else if (turb_model == TURB_MODEL::SSGLRR_OMEGA2012) {
+        const auto* rsm = solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint);
+        turb_ke = 0.5*(rsm[0]+rsm[1]+rsm[2]);
+      }
 
       if (config->GetKind_HybridRANSLES() != NO_HYBRIDRANSLES) {
         su2double DES_LengthScale = solver_container[TURB_SOL]->GetNodes()->GetDES_LengthScale(iPoint);

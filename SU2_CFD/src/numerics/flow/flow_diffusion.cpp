@@ -41,6 +41,7 @@ CAvgGrad_Base::CAvgGrad_Base(unsigned short val_nDim,
   unsigned short iVar, iDim;
 
   implicit = (config->GetKind_TimeIntScheme_Flow() == EULER_IMPLICIT);
+  useTransportedRSM = config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012;
 
   TauWall_i = 0; TauWall_j = 0;
 
@@ -128,7 +129,17 @@ void CAvgGrad_Base::SetStressTensor(const su2double *val_primvar,
    * for the turbulent part of tau. Otherwise both the laminar and turbulent
    * parts of tau can be computed with the total viscosity. --- */
 
-  if (sstParsedOptions.uq) {
+  if (useTransportedRSM) {
+    ComputeStressTensor(nDim, tau, val_gradprimvar+1, val_laminar_viscosity);
+    const unsigned short p[6]={0,1,2,0,0,1};
+    const unsigned short q[6]={0,1,2,1,2,2};
+    for (unsigned short v=0; v<6; ++v) {
+      if (p[v]>=nDim || q[v]>=nDim) continue;
+      const su2double stress=-Density*0.5*(RSM_i[v]+RSM_j[v]);
+      tau[p[v]][q[v]]+=stress;
+      if (p[v]!=q[v]) tau[q[v]][p[v]]+=stress;
+    }
+  } else if (sstParsedOptions.uq) {
     // laminar part
     ComputeStressTensor(nDim, tau, val_gradprimvar+1, val_laminar_viscosity);
     // add turbulent part which was perturbed
@@ -182,7 +193,8 @@ void CAvgGrad_Base::SetTauJacobian(const su2double *val_Mean_PrimVar,
   /*--- QCR and wall functions are **not** accounted for here ---*/
 
   const su2double Density = val_Mean_PrimVar[nDim+2];
-  const su2double total_viscosity = val_laminar_viscosity + val_eddy_viscosity;
+  const su2double total_viscosity = val_laminar_viscosity +
+                                    (useTransportedRSM ? 0.0 : val_eddy_viscosity);
   const su2double xi = total_viscosity/(Density*val_dist_ij);
 
   for (unsigned short iDim = 0; iDim < nDim; iDim++) {
@@ -355,6 +367,29 @@ void CAvgGrad_Base::GetViscousProjJacs(const su2double *val_Mean_PrimVar,
     val_Proj_Jac_Tensor_i[4][3] += factor*val_Proj_Visc_Flux[3];
     val_Proj_Jac_Tensor_j[4][3] += factor*val_Proj_Visc_Flux[3];
 
+  }
+
+  if (useTransportedRSM) {
+    // Frozen-R derivative of -rho_mean R_mean in the momentum and energy
+    // fluxes. Both endpoint density derivatives have the same sign.
+    const unsigned short p[6]={0,1,2,0,0,1};
+    const unsigned short q[6]={0,1,2,1,2,2};
+    su2double meanR[3][3]={};
+    for (unsigned short v=0; v<6; ++v) {
+      meanR[p[v]][q[v]]=0.5*(RSM_i[v]+RSM_j[v]);
+      meanR[q[v]][p[v]]=meanR[p[v]][q[v]];
+    }
+    su2double energyDerivative=0.0;
+    for (unsigned short a=0; a<nDim; ++a) {
+      su2double stressDerivative=0.0;
+      for (unsigned short k=0; k<nDim; ++k)
+        stressDerivative-=0.5*val_dS*meanR[a][k]*UnitNormal[k];
+      val_Proj_Jac_Tensor_i[a+1][0]+=stressDerivative;
+      val_Proj_Jac_Tensor_j[a+1][0]+=stressDerivative;
+      energyDerivative+=stressDerivative*val_Mean_PrimVar[a+1];
+    }
+    val_Proj_Jac_Tensor_i[nDim+1][0]+=energyDerivative;
+    val_Proj_Jac_Tensor_j[nDim+1][0]+=energyDerivative;
   }
 
 }

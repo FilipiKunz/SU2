@@ -183,6 +183,7 @@ protected:
   roughness_j = 0.0;                       /*!< \brief Roughness of the wall nearest to point j. */
 
   su2double MeanPerturbedRSM[3][3];   /*!< \brief Perturbed Reynolds stress tensor  */
+  su2double RSM_i[6] = {}, RSM_j[6] = {}; /*!< \brief Transported positive covariance: 11,22,33,12,13,23. */
   SST_ParsedOptions sstParsedOptions; /*!< \brief additional options for the SST turbulence model */
   unsigned short Eig_Val_Comp;    /*!< \brief Component towards which perturbation is perfromed */
   su2double uq_delta_b;           /*!< \brief Magnitude of perturbation */
@@ -835,6 +836,13 @@ public:
   inline void SetTurbKineticEnergy(su2double val_turb_ke_i, su2double val_turb_ke_j) {
     turb_ke_i = val_turb_ke_i;
     turb_ke_j = val_turb_ke_j;
+  }
+
+  inline void SetReynoldsStress(const su2double* ri, const su2double* rj) {
+    for (unsigned short v=0; v<6; ++v) {
+      RSM_i[v]=ri[v];
+      RSM_j[v]=rj[v];
+    }
   }
 
   /*!

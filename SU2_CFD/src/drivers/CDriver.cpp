@@ -1205,7 +1205,7 @@ void CDriver::InstantiateTurbulentNumerics(unsigned short nVar_Turb, int offset,
 
   /*--- Assign turbulence model booleans ---*/
 
-  bool spalart_allmaras = false, menter_sst = false;
+  bool spalart_allmaras = false, menter_sst = false, ssglrr_rsm = false;
 
   switch (config->GetKind_Turb_Model()) {
     case TURB_MODEL::NONE:
@@ -1216,6 +1216,9 @@ void CDriver::InstantiateTurbulentNumerics(unsigned short nVar_Turb, int offset,
       break;
     case TURB_MODEL::SST:
       menter_sst = true;
+      break;
+    case TURB_MODEL::SSGLRR_OMEGA2012:
+      ssglrr_rsm = true;
       break;
   }
 
@@ -1244,6 +1247,8 @@ void CDriver::InstantiateTurbulentNumerics(unsigned short nVar_Turb, int offset,
         }
         else if (menter_sst)
           numerics[iMGlevel][TURB_SOL][conv_term] = new CUpwSca_TurbSST<Indices>(nDim, nVar_Turb, config);
+        else if (ssglrr_rsm)
+          numerics[iMGlevel][TURB_SOL][conv_term] = new CUpwSca_TurbSSGLRR<Indices>(nDim, nVar_Turb, config);
       }
       break;
     default:
@@ -1263,6 +1268,8 @@ void CDriver::InstantiateTurbulentNumerics(unsigned short nVar_Turb, int offset,
     }
     else if (menter_sst)
       numerics[iMGlevel][TURB_SOL][visc_term] = new CAvgGrad_TurbSST<Indices>(nDim, nVar_Turb, constants, true, config);
+    else if (ssglrr_rsm)
+      numerics[iMGlevel][TURB_SOL][visc_term] = new CAvgGrad_TurbSSGLRR<Indices>(nDim, nVar_Turb, true, config);
   }
 
   /*--- Definition of the source term integration scheme for each equation and mesh level ---*/
@@ -1275,6 +1282,8 @@ void CDriver::InstantiateTurbulentNumerics(unsigned short nVar_Turb, int offset,
     else if (menter_sst)
       turb_source_first_term = new CSourcePieceWise_TurbSST<Indices>(nDim, nVar_Turb, constants, kine_Inf, omega_Inf,
                                                                      config);
+    else if (ssglrr_rsm)
+      turb_source_first_term = new CSourcePieceWise_TurbSSGLRR<Indices>(nDim, nVar_Turb, config);
 
     numerics[iMGlevel][TURB_SOL][source_second_term] = new CSourceNothing(nDim, nVar_Turb, config);
   }
@@ -1295,6 +1304,10 @@ void CDriver::InstantiateTurbulentNumerics(unsigned short nVar_Turb, int offset,
       numerics[iMGlevel][TURB_SOL][conv_bound_term] = new CUpwSca_TurbSST<Indices>(nDim, nVar_Turb, config);
       numerics[iMGlevel][TURB_SOL][visc_bound_term] = new CAvgGrad_TurbSST<Indices>(nDim, nVar_Turb, constants, false,
                                                                                     config);
+    }
+    else if (ssglrr_rsm) {
+      numerics[iMGlevel][TURB_SOL][conv_bound_term] = new CUpwSca_TurbSSGLRR<Indices>(nDim, nVar_Turb, config);
+      numerics[iMGlevel][TURB_SOL][visc_bound_term] = new CAvgGrad_TurbSSGLRR<Indices>(nDim, nVar_Turb, false, config);
     }
   }
 }

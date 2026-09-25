@@ -26,6 +26,7 @@
 
 #pragma once
 
+
 #include "../../../../Common/include/toolboxes/geometry_toolbox.hpp"
 #include "../scalar/scalar_sources.hpp"
 
@@ -928,5 +929,60 @@ class CSourcePieceWise_TurbSST final : public CNumerics {
     AD::EndPreacc();
 
     return ResidualType<>(Residual, Jacobian_i, nullptr);
+  }
+};
+
+/* NASA TMR SSG/LRR-RSM-omega2012 point source. The seven transport variables
+ * are R11,R22,R33,R12,R13,R23,omega; k is derived from their trace. */
+#include "ssglrr_omega2012.hpp"
+template <class FlowIndices>
+class CSourcePieceWise_TurbSSGLRR final : public CNumerics {
+  const FlowIndices idx;
+  su2double residual[7] = {};
+  su2double jacBuffer[49] = {};
+  su2double* jac[7] = {};
+public:
+  CSourcePieceWise_TurbSSGLRR(unsigned short ndim, unsigned short nvar, const CConfig* config)
+    : CNumerics(ndim,nvar,config), idx(ndim,config->GetnSpecies()) {
+    if (nvar!=7) SU2_MPI::Error("SSG/LRR needs seven equations",CURRENT_FUNCTION);
+    for (unsigned short v=0; v<7; ++v) jac[v]=jacBuffer+7*v;
+  }
+  ResidualType<> ComputeResidual(const CConfig*) override {
+    for (unsigned short v=0; v<7; ++v) {
+      residual[v]=0.0;
+      for (unsigned short w=0; w<7; ++w) jac[v][w]=0.0;
+    }
+    if (dist_i<=1e-10) return ResidualType<>(residual,jac,nullptr);
+    SSGLRROmega2012::State s{};
+    const unsigned short p[6]={0,1,2,0,0,1};
+    const unsigned short q[6]={0,1,2,1,2,2};
+    for (unsigned short v=0; v<6; ++v) {
+      const double x=SU2_TYPE::GetValue(ScalarVar_i[v]);
+      s.R[p[v]][q[v]]=s.R[q[v]][p[v]]=x;
+    }
+    for (unsigned short j=0; j<nDim; ++j) {
+      s.gradK[j]=0.5*(SU2_TYPE::GetValue(ScalarVar_Grad_i[0][j])
+                       +SU2_TYPE::GetValue(ScalarVar_Grad_i[1][j])
+                       +SU2_TYPE::GetValue(ScalarVar_Grad_i[2][j]));
+      s.gradOmega[j]=SU2_TYPE::GetValue(ScalarVar_Grad_i[6][j]);
+      for (unsigned short i=0; i<nDim; ++i)
+        s.gradU[i][j]=SU2_TYPE::GetValue(PrimVar_Grad_i[idx.Velocity()+i][j]);
+    }
+    s.omega=SU2_TYPE::GetValue(ScalarVar_i[6]);
+    s.rho=SU2_TYPE::GetValue(V_i[idx.Density()]);
+    s.mu=SU2_TYPE::GetValue(V_i[idx.LaminarViscosity()]);
+    s.wallDistance=SU2_TYPE::GetValue(dist_i);
+    const auto t=SSGLRROmega2012::evaluate(s);
+    for (unsigned short v=0; v<6; ++v)
+      residual[v]=s.rho*t.stressSource[p[v]][q[v]]*Volume;
+    residual[6]=s.rho*t.omegaSource*Volume;
+    // Sink-only point Jacobian, as in SU2's SST source. Full cross-coupling
+    // remains explicit; the conservative flow block Jacobian is unchanged.
+    const double C1=t.F1*1.8+(1.0-t.F1)*1.7;
+    const double beta=t.F1*0.075+(1.0-t.F1)*0.0828;
+    for (unsigned short v=0; v<6; ++v)
+      jac[v][v]=-s.rho*C1*0.09*s.omega*Volume;
+    jac[6][6]=-2.0*s.rho*beta*s.omega*Volume;
+    return ResidualType<>(residual,jac,nullptr);
   }
 };

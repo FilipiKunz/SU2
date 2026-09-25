@@ -810,7 +810,9 @@ void CEulerSolver::SetNondimensionalization(CConfig *config, unsigned short iMes
   bool viscous            = config->GetViscous();
   bool gravity            = config->GetGravityForce();
   bool turbulent          = (config->GetKind_Turb_Model() != TURB_MODEL::NONE);
-  bool tkeNeeded          = (turbulent && config->GetKind_Turb_Model() == TURB_MODEL::SST);
+  bool tkeNeeded          = (turbulent &&
+                             (config->GetKind_Turb_Model() == TURB_MODEL::SST ||
+                              config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012));
   bool free_stream_temp   = (config->GetKind_FreeStreamOption() == FREESTREAM_OPTION::TEMPERATURE_FS);
   bool reynolds_init      = (config->GetKind_InitOption() == REYNOLDS);
   bool aeroelastic        = config->GetAeroelastic_Simulation();
@@ -4798,7 +4800,8 @@ void CEulerSolver::BC_Far_Field(CGeometry *geometry, CSolver **solver_container,
 
   bool implicit       = config->GetKind_TimeIntScheme() == EULER_IMPLICIT;
   bool viscous        = config->GetViscous();
-  bool tkeNeeded = config->GetKind_Turb_Model() == TURB_MODEL::SST;
+  bool tkeNeeded = (config->GetKind_Turb_Model() == TURB_MODEL::SST ||
+                    config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012);
 
   auto *Normal = new su2double[nDim];
 
@@ -5011,6 +5014,11 @@ void CEulerSolver::BC_Far_Field(CGeometry *geometry, CSolver **solver_container,
         if (config->GetKind_Turb_Model() == TURB_MODEL::SST)
           visc_numerics->SetTurbKineticEnergy(solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0),
                                               solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0));
+        if (config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012) {
+          const su2double rDiag = (2.0/3.0)*config->GetTke_FreeStreamND();
+          const su2double rFar[6] = {rDiag, rDiag, rDiag, 0.0, 0.0, 0.0};
+          visc_numerics->SetReynoldsStress(solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint), rFar);
+        }
 
         /*--- Compute and update viscous residual ---*/
 

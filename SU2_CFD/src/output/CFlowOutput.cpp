@@ -1041,6 +1041,14 @@ void CFlowOutput::AddHistoryOutputFields_ScalarRMS_RES(const CConfig* config) {
       AddHistoryOutput("RMS_DISSIPATION", "rms[w]",  ScreenOutputFormat::FIXED, "RMS_RES", "Root-mean square residual of dissipation (SST model).", HistoryFieldType::RESIDUAL);
       break;
 
+    case TURB_FAMILY::RSM: {
+      const char* names[7]={"R11","R22","R33","R12","R13","R23","OMEGA"};
+      for (unsigned short v=0; v<7; ++v)
+        AddHistoryOutput(std::string("RMS_")+names[v],std::string("rms[")+names[v]+"]",
+                         ScreenOutputFormat::FIXED,"RMS_RES","SSG/LRR transport residual",HistoryFieldType::RESIDUAL);
+      break;
+    }
+
     case TURB_FAMILY::NONE: break;
   }
   switch (config->GetKind_Trans_Model()) {
@@ -1244,6 +1252,13 @@ void CFlowOutput::LoadHistoryDataScalar(const CConfig* config, const CSolver* co
       }
       break;
 
+    case TURB_FAMILY::RSM: {
+      const char* names[7]={"R11","R22","R33","R12","R13","R23","OMEGA"};
+      for (unsigned short v=0; v<7; ++v)
+        SetHistoryOutputValue(std::string("RMS_")+names[v],log10(solver[TURB_SOL]->GetRes_RMS(v)));
+      break;
+    }
+
     case TURB_FAMILY::NONE: break;
   }
 
@@ -1325,6 +1340,15 @@ void CFlowOutput::SetVolumeOutputFieldsScalarSolution(const CConfig* config){
       AddVolumeOutput("TKE", "Turb_Kin_Energy", "SOLUTION", "Turbulent kinetic energy");
       AddVolumeOutput("DISSIPATION", "Omega", "SOLUTION", "Rate of dissipation");
       break;
+
+    case TURB_FAMILY::RSM: {
+      const char* names[7]={"R11","R22","R33","R12","R13","R23","OMEGA"};
+      for (unsigned short v=0; v<7; ++v)
+        AddVolumeOutput(names[v],names[v],"SOLUTION","SSG/LRR transported variable");
+      AddVolumeOutput("K_RSM","K_RSM","SOLUTION","Half trace of Reynolds covariance");
+      AddVolumeOutput("F1_RSM","F1_RSM","SOLUTION","SSG/LRR blending function");
+      break;
+    }
 
     case TURB_FAMILY::NONE:
       break;
@@ -1663,6 +1687,17 @@ void CFlowOutput::LoadVolumeDataScalar(const CConfig* config, const CSolver* con
         SetVolumeOutputValue("LIMITER_DISSIPATION", iPoint, Node_Turb->GetLimiter(iPoint, 1));
       }
       break;
+
+    case TURB_FAMILY::RSM: {
+      const char* names[7]={"R11","R22","R33","R12","R13","R23","OMEGA"};
+      for (unsigned short v=0; v<7; ++v)
+        SetVolumeOutputValue(names[v],iPoint,Node_Turb->GetSolution(iPoint,v));
+      SetVolumeOutputValue("K_RSM",iPoint,0.5*(Node_Turb->GetSolution(iPoint,0)
+                                              +Node_Turb->GetSolution(iPoint,1)
+                                              +Node_Turb->GetSolution(iPoint,2)));
+      SetVolumeOutputValue("F1_RSM",iPoint,Node_Turb->GetF1blending(iPoint));
+      break;
+    }
 
     case TURB_FAMILY::NONE:
       break;

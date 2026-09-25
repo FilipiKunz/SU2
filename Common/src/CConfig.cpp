@@ -5676,6 +5676,8 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
       nTurbVar = 1; break;
     case TURB_FAMILY::KW:
       nTurbVar = 2; break;
+    case TURB_FAMILY::RSM:
+      nTurbVar = 7; break;
   }
   /*--- Check whether the number of entries of the MARKER_INLET_TURBULENT equals the number of turbulent properties
        used for the respective turbulent model. nTurb_Properties must be equal to 1 or 2 depending on whether SA or
@@ -5685,6 +5687,9 @@ void CConfig::SetPostprocessing(SU2_COMPONENT val_software, unsigned short val_i
         "The use of MARKER_INLET_TURBULENT requires the number of entries when SST Model is used \n"
         "to be equal to 2 : Turbulent intensity and ratio turbulent to laminar viscosity",
         CURRENT_FUNCTION);
+  if (Marker_Inlet_Turb != nullptr && Kind_Turb_Model == TURB_MODEL::SSGLRR_OMEGA2012 && nTurb_Properties != 2)
+    SU2_MPI::Error("SSG/LRR MARKER_INLET_TURBULENT requires intensity and turbulent/laminar viscosity ratio",
+                   CURRENT_FUNCTION);
   if (Marker_Inlet_Turb != nullptr && Kind_Turb_Model == TURB_MODEL::SA && nTurb_Properties != 1)
     SU2_MPI::Error(
         "The use of MARKER_INLET_TURBULENT requires the number of entries when SA Model is used \n"
@@ -6422,6 +6427,9 @@ void CConfig::SetOutput(SU2_COMPONENT val_software, unsigned short val_izone) {
         cout << "Turbulence model: ";
         switch (Kind_Turb_Model) {
           case TURB_MODEL::NONE: break;
+          case TURB_MODEL::SSGLRR_OMEGA2012:
+            cout << "SSG/LRR-RSM-omega 2012" << endl;
+            break;
           case TURB_MODEL::SA:
             switch (saParsedOptions.version) {
               case SA_OPTIONS::NEG:
@@ -9332,7 +9340,7 @@ const su2double* CConfig::GetInlet_TurbVal(const string& val_marker) const {
   for (auto iMarker = 0u; iMarker < nMarker_Inlet_Turb; iMarker++) {
     if (Marker_Inlet_Turb[iMarker] == val_marker) return Inlet_TurbVal[iMarker];
   }
-  if (Kind_Turb_Model == TURB_MODEL::SST) {
+  if (Kind_Turb_Model == TURB_MODEL::SST || Kind_Turb_Model == TURB_MODEL::SSGLRR_OMEGA2012) {
     return TurbIntensityAndViscRatioFreeStream;
   }
   return &NuFactor_FreeStream;
