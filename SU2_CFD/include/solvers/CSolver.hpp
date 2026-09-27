@@ -3037,6 +3037,10 @@ public:
    * \return The mass fluxes (from flow solvers) across the edges.
    */
   inline virtual const su2activevector* GetEdgeMassFluxes() const { return nullptr; }
+  virtual su2double GetBoundaryMassFlux(unsigned short marker, unsigned long vertex) const {
+    SU2_MPI::Error("This flow solver does not provide boundary mass fluxes", CURRENT_FUNCTION);
+    return 0.0;
+  }
 
   /*!
    * \brief A virtual member.

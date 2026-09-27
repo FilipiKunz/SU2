@@ -1623,6 +1623,9 @@ public:
    */
   inline void SetMassFlux(const su2double val_MassFlux) { MassFlux = val_MassFlux; }
 
+  /*! Use the flow solver's numerical mass flux without a bounded-scalar divergence correction. */
+  virtual bool UsesFlowMassFlux() const { return false; }
+
   /*!
    * \brief Obtain information on bounded scalar problem
    * \return is_bounded_scalar : scalar solver uses bounded scalar convective transport

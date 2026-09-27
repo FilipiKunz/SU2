@@ -156,6 +156,12 @@ CEulerSolver::CEulerSolver(CGeometry *geometry, CConfig *config,
   /*--- MPI + OpenMP initialization. ---*/
 
   HybridParallelInitialization(*config, *geometry);
+  if (config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012) {
+    EdgeMassFluxes.resize(geometry->GetnEdge()) = su2double(0.0);
+    BoundaryMassFluxes.resize(nMarker);
+    for (unsigned short marker=0; marker<nMarker; ++marker)
+      BoundaryMassFluxes[marker].assign(nVertex[marker], 0.0);
+  }
 
   /*--- Jacobians and vector structures for implicit computations ---*/
 
@@ -1965,6 +1971,7 @@ void CEulerSolver::Upwind_Residual(CGeometry *geometry, CSolver **solver_contain
     /*--- Compute the residual ---*/
 
     auto residual = numerics->ComputeResidual(config);
+    if (EdgeMassFluxes.size()) EdgeMassFluxes[iEdge] = residual[0];
 
     /*--- Set the final value of the Roe dissipation coefficient ---*/
 
@@ -4976,6 +4983,7 @@ void CEulerSolver::BC_Far_Field(CGeometry *geometry, CSolver **solver_container,
       /*--- Compute the convective residual using an upwind scheme ---*/
 
       auto residual = conv_numerics->ComputeResidual(config);
+      if (!BoundaryMassFluxes.empty()) BoundaryMassFluxes[val_marker][iVertex] = residual[0];
 
       /*--- Update residual value ---*/
 
@@ -7182,6 +7190,7 @@ void CEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
     /*--- Compute the residual using an upwind scheme ---*/
 
     auto residual = conv_numerics->ComputeResidual(config);
+      if (!BoundaryMassFluxes.empty()) BoundaryMassFluxes[val_marker][iVertex] = residual[0];
 
     /*--- Update residual value ---*/
 
@@ -7314,6 +7323,7 @@ void CEulerSolver::BC_Outlet(CGeometry *geometry, CSolver **solver_container,
       /*--- Compute the residual using an upwind scheme ---*/
 
       auto residual = conv_numerics->ComputeResidual(config);
+      if (!BoundaryMassFluxes.empty()) BoundaryMassFluxes[val_marker][iVertex] = residual[0];
 
       /*--- Add Residuals and Jacobians ---*/
 

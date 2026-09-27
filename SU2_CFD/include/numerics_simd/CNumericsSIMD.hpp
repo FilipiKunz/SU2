@@ -83,7 +83,7 @@ public:
                            UpdateType updateType,
                            Double updateMask,
                            CSysVector<su2double>& vector,
-                           SparseMatrixType& matrix) const = 0;
+                           SparseMatrixType& matrix, su2double* massFlux = nullptr) const = 0;
 
   /*! \brief Destructor of the class. */
   virtual ~CNumericsSIMD(void) = default;

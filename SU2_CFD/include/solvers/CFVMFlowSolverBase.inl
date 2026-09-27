@@ -1563,9 +1563,11 @@ void CFVMFlowSolverBase<V, R>::EdgeFluxResidual(const CGeometry *geometry,
       }
 
       if (ReducerStrategy) {
-        edgeNumerics->ComputeFlux(iEdge, *config, *geometry, *nodes, UpdateType::REDUCTION, mask, EdgeFluxes, Jacobian);
+        edgeNumerics->ComputeFlux(iEdge, *config, *geometry, *nodes, UpdateType::REDUCTION, mask, EdgeFluxes, Jacobian,
+                                  EdgeMassFluxes.size() ? EdgeMassFluxes.data() : nullptr);
       } else {
-        edgeNumerics->ComputeFlux(iEdge, *config, *geometry, *nodes, UpdateType::COLORING, mask, LinSysRes, Jacobian);
+        edgeNumerics->ComputeFlux(iEdge, *config, *geometry, *nodes, UpdateType::COLORING, mask, LinSysRes, Jacobian,
+                                  EdgeMassFluxes.size() ? EdgeMassFluxes.data() : nullptr);
       }
       if (MGLevel == MESH_0) {
         for (auto j = 0ul; j < Double::Size; ++j)

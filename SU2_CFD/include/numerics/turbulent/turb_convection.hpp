@@ -158,6 +158,8 @@ class CUpwSca_TurbSSGLRR final : public CUpwScalar<FlowIndices> {
   }
 
 public:
+  bool UsesFlowMassFlux() const override { return !Base::incompressible; }
+
   CUpwSca_TurbSSGLRR(unsigned short ndim, unsigned short nvar, const CConfig* config)
     : CUpwScalar<FlowIndices>(ndim,nvar,config) {
     if (nvar != 7) SU2_MPI::Error("SSG/LRR needs seven equations", CURRENT_FUNCTION);

@@ -429,7 +429,9 @@ void CTurbSSGLRROmega2012Solver::BC_Inlet(CGeometry *geometry, CSolver **solver_
         conv_numerics->SetGridVel(geometry->nodes->GetGridVel(iPoint),
                                   geometry->nodes->GetGridVel(iPoint));
 
-      if (conv_numerics->GetBoundedScalar()) {
+      if (conv_numerics->UsesFlowMassFlux()) {
+        conv_numerics->SetMassFlux(solver_container[FLOW_SOL]->GetBoundaryMassFlux(val_marker, iVertex));
+      } else if (conv_numerics->GetBoundedScalar()) {
         const su2double* velocity = &V_inlet[prim_idx.Velocity()];
         const su2double density = solver_container[FLOW_SOL]->GetNodes()->GetDensity(iPoint);
         conv_numerics->SetMassFlux(BoundedScalarBCFlux(iPoint, implicit, density, velocity, Normal));
@@ -526,7 +528,9 @@ void CTurbSSGLRROmega2012Solver::BC_Outlet(CGeometry *geometry, CSolver **solver
       conv_numerics->SetGridVel(geometry->nodes->GetGridVel(iPoint),
                                 geometry->nodes->GetGridVel(iPoint));
 
-      if (conv_numerics->GetBoundedScalar()) {
+      if (conv_numerics->UsesFlowMassFlux()) {
+        conv_numerics->SetMassFlux(solver_container[FLOW_SOL]->GetBoundaryMassFlux(val_marker, iVertex));
+      } else if (conv_numerics->GetBoundedScalar()) {
         const su2double* velocity = &V_outlet[prim_idx.Velocity()];
         const su2double density = solver_container[FLOW_SOL]->GetNodes()->GetDensity(iPoint);
         conv_numerics->SetMassFlux(BoundedScalarBCFlux(iPoint, implicit, density, velocity, Normal));

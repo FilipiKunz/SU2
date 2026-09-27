@@ -978,14 +978,17 @@ public:
     residual[6]=s.rho*t.omegaSource*Volume;
     // SU2 advances rho*Rij and rho*omega. With rho frozen in the turbulence
     // block, d(rho*S)/d(rho*q) = dS/dq: no extra rho belongs in this Jacobian.
-    // As in SU2's SST implementation, keep production and redistribution
-    // explicit and implicitize only the local destruction terms. The full
-    // local source Jacobian was tested on NACA 0012 at 15 degrees and gave
-    // a growing nonlinear residual from a uniform start.
+    // Match OpenFOAM's frozen-coefficient implicit treatment of the linear
+    // redistribution sink: (C1*epsilon + C1star*G)/k, with G = Pkk/2.
+    // This is a diagonal approximation, not the full source Jacobian.
+    // The physical residual above is unchanged.
     const double C1=t.F1*1.8+(1.0-t.F1)*1.7;
+    const double C1star=(1.0-t.F1)*0.9;
+    const double G=0.5*(t.production[0][0]+t.production[1][1]+t.production[2][2]);
+    const double stressSink=C1*0.09*s.omega+C1star*G/t.k;
     const double beta=t.F1*0.075+(1.0-t.F1)*0.0828;
     for (unsigned short v=0; v<6; ++v)
-      jac[v][v]=-C1*0.09*s.omega*Volume;
+      jac[v][v]=-stressSink*Volume;
     jac[6][6]=-2.0*beta*s.omega*Volume;
     return ResidualType<>(residual,jac,nullptr);
   }
