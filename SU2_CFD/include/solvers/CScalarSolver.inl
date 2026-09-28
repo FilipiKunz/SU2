@@ -270,7 +270,7 @@ void CScalarSolver<VariableType>::Upwind_Residual(CGeometry* geometry, CSolver**
 
       /*--- Convective flux ---*/
       su2double EdgeMassFlux = 0.0;
-      if (bounded_scalar) {
+      if (bounded_scalar || numerics->UsesFlowMassFlux()) {
         EdgeMassFlux = edgeMassFluxes[iEdge];
         numerics->SetMassFlux(EdgeMassFlux);
       }
@@ -420,7 +420,9 @@ void CScalarSolver<VariableType>::BC_Far_Field(CGeometry* geometry, CSolver** so
         Normal[iDim] = -geometry->vertex[val_marker][iVertex]->GetNormal(iDim);
       conv_numerics->SetNormal(Normal);
 
-      if (conv_numerics->GetBoundedScalar()) {
+      if (conv_numerics->UsesFlowMassFlux()) {
+        conv_numerics->SetMassFlux(solver_container[FLOW_SOL]->GetBoundaryMassFlux(val_marker, iVertex));
+      } else if (conv_numerics->GetBoundedScalar()) {
         const su2double* velocity = &V_infty[prim_idx.Velocity()];
         const su2double density = solver_container[FLOW_SOL]->GetNodes()->GetDensity(iPoint);
         conv_numerics->SetMassFlux(BoundedScalarBCFlux(iPoint, implicit, density, velocity, Normal));

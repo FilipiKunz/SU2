@@ -87,7 +87,7 @@ public:
                    UpdateType updateType,
                    Double updateMask,
                    CSysVector<su2double>& vector,
-                   SparseMatrixType& matrix) const final {
+                   SparseMatrixType& matrix, su2double* massFlux = nullptr) const final {
 
     /*--- Start preaccumulation, inputs are registered
      *    automatically in "gatherVariables". ---*/
@@ -177,6 +177,10 @@ public:
     /*--- Stop preaccumulation. ---*/
 
     stopPreacc(flux);
+    if (massFlux) {
+      for (unsigned short lane=0; lane<Double::Size; ++lane)
+        if (updateMask[lane] != 0.0) massFlux[iEdge[lane]] = flux(0)[lane];
+    }
 
     /*--- Update the vector and system matrix. ---*/
 

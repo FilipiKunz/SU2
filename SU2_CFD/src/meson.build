@@ -76,6 +76,7 @@ su2_cfd_src += files(['variables/CIncNSVariable.cpp',
                       'variables/CRadVariable.cpp',
                       'variables/CRadP1Variable.cpp',
                       'variables/CTurbSSTVariable.cpp',
+                      'variables/CTurbSSGLRROmega2012Variable.cpp',
                       'variables/CVariable.cpp',
                       'variables/CNSVariable.cpp',
                       'variables/CAdjTurbVariable.cpp',
@@ -116,6 +117,7 @@ su2_cfd_src += files(['solvers/CSolverFactory.cpp',
                       'solvers/CTurbSolver.cpp',
                       'solvers/CTurbSASolver.cpp',
                       'solvers/CTurbSSTSolver.cpp',
+                      'solvers/CTurbSSGLRROmega2012Solver.cpp',
                       'solvers/CFEASolverBase.cpp',
                       'solvers/CGradientSmoothingSolver.cpp'])
 
@@ -241,4 +243,3 @@ if get_option('enable-directdiff')
                           cpp_args: ['-fPIC'] + [default_warning_flags, su2_cpp_args, codi_for_args] + profiling_args,
                           link_args: profiling_args)
 endif
-

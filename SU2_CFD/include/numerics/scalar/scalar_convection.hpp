@@ -120,7 +120,7 @@ class CUpwScalar : public CNumerics {
 
     ExtraADPreaccIn();
 
-    if (bounded_scalar) {
+    if (bounded_scalar || UsesFlowMassFlux()) {
       a0 = fmax(0.0, MassFlux) / V_i[idx.Density()];
       a1 = fmin(0.0, MassFlux) / V_j[idx.Density()];
     } else {

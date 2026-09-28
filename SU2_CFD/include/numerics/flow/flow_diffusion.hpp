@@ -43,6 +43,7 @@
  */
 class CAvgGrad_Base : public CNumerics {
 protected:
+  bool useTransportedRSM = false;
   const unsigned short nPrimVar;          /*!< \brief The size of the primitive variable array used in the numerics class. */
   const bool correct_gradient;            /*!< \brief Apply a correction to the gradient term */
   bool implicit = false;                  /*!< \brief Implicit calculus. */

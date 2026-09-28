@@ -156,6 +156,12 @@ CEulerSolver::CEulerSolver(CGeometry *geometry, CConfig *config,
   /*--- MPI + OpenMP initialization. ---*/
 
   HybridParallelInitialization(*config, *geometry);
+  if (config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012) {
+    EdgeMassFluxes.resize(geometry->GetnEdge()) = su2double(0.0);
+    BoundaryMassFluxes.resize(nMarker);
+    for (unsigned short marker=0; marker<nMarker; ++marker)
+      BoundaryMassFluxes[marker].assign(nVertex[marker], 0.0);
+  }
 
   /*--- Jacobians and vector structures for implicit computations ---*/
 
@@ -810,7 +816,9 @@ void CEulerSolver::SetNondimensionalization(CConfig *config, unsigned short iMes
   bool viscous            = config->GetViscous();
   bool gravity            = config->GetGravityForce();
   bool turbulent          = (config->GetKind_Turb_Model() != TURB_MODEL::NONE);
-  bool tkeNeeded          = (turbulent && config->GetKind_Turb_Model() == TURB_MODEL::SST);
+  bool tkeNeeded          = (turbulent &&
+                             (config->GetKind_Turb_Model() == TURB_MODEL::SST ||
+                              config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012));
   bool free_stream_temp   = (config->GetKind_FreeStreamOption() == FREESTREAM_OPTION::TEMPERATURE_FS);
   bool reynolds_init      = (config->GetKind_InitOption() == REYNOLDS);
   bool aeroelastic        = config->GetAeroelastic_Simulation();
@@ -1963,6 +1971,7 @@ void CEulerSolver::Upwind_Residual(CGeometry *geometry, CSolver **solver_contain
     /*--- Compute the residual ---*/
 
     auto residual = numerics->ComputeResidual(config);
+    if (EdgeMassFluxes.size()) EdgeMassFluxes[iEdge] = residual[0];
 
     /*--- Set the final value of the Roe dissipation coefficient ---*/
 
@@ -4798,7 +4807,8 @@ void CEulerSolver::BC_Far_Field(CGeometry *geometry, CSolver **solver_container,
 
   bool implicit       = config->GetKind_TimeIntScheme() == EULER_IMPLICIT;
   bool viscous        = config->GetViscous();
-  bool tkeNeeded = config->GetKind_Turb_Model() == TURB_MODEL::SST;
+  bool tkeNeeded = (config->GetKind_Turb_Model() == TURB_MODEL::SST ||
+                    config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012);
 
   auto *Normal = new su2double[nDim];
 
@@ -4973,6 +4983,7 @@ void CEulerSolver::BC_Far_Field(CGeometry *geometry, CSolver **solver_container,
       /*--- Compute the convective residual using an upwind scheme ---*/
 
       auto residual = conv_numerics->ComputeResidual(config);
+      if (!BoundaryMassFluxes.empty()) BoundaryMassFluxes[val_marker][iVertex] = residual[0];
 
       /*--- Update residual value ---*/
 
@@ -5011,6 +5022,11 @@ void CEulerSolver::BC_Far_Field(CGeometry *geometry, CSolver **solver_container,
         if (config->GetKind_Turb_Model() == TURB_MODEL::SST)
           visc_numerics->SetTurbKineticEnergy(solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0),
                                               solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint,0));
+        if (config->GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012) {
+          const su2double rDiag = (2.0/3.0)*config->GetTke_FreeStreamND();
+          const su2double rFar[6] = {rDiag, rDiag, rDiag, 0.0, 0.0, 0.0};
+          visc_numerics->SetReynoldsStress(solver_container[TURB_SOL]->GetNodes()->GetSolution(iPoint), rFar);
+        }
 
         /*--- Compute and update viscous residual ---*/
 
@@ -7174,6 +7190,7 @@ void CEulerSolver::BC_Inlet(CGeometry *geometry, CSolver **solver_container,
     /*--- Compute the residual using an upwind scheme ---*/
 
     auto residual = conv_numerics->ComputeResidual(config);
+      if (!BoundaryMassFluxes.empty()) BoundaryMassFluxes[val_marker][iVertex] = residual[0];
 
     /*--- Update residual value ---*/
 
@@ -7306,6 +7323,7 @@ void CEulerSolver::BC_Outlet(CGeometry *geometry, CSolver **solver_container,
       /*--- Compute the residual using an upwind scheme ---*/
 
       auto residual = conv_numerics->ComputeResidual(config);
+      if (!BoundaryMassFluxes.empty()) BoundaryMassFluxes[val_marker][iVertex] = residual[0];
 
       /*--- Add Residuals and Jacobians ---*/
 

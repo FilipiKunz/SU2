@@ -344,3 +344,90 @@ public:
     F1_i = val_F1_i; F1_j = val_F1_j;
   }
 };
+
+/* NASA 2012 generalized-gradient diffusion: n_k K_kl dR_ij/dx_l.
+ * K_kl = mu delta_kl + D rho R_kl/(Cmu omega). The off-diagonal
+ * entries are retained; this is not a scalar eddy diffusivity. */
+template <class FlowIndices>
+class CAvgGrad_TurbSSGLRR final : public CAvgGrad_Scalar<FlowIndices> {
+  using Base = CAvgGrad_Scalar<FlowIndices>;
+  using Base::nDim;
+  using Base::nVar;
+  using Base::Normal;
+  using Base::Coord_i;
+  using Base::Coord_j;
+  using Base::ScalarVar_i;
+  using Base::ScalarVar_j;
+  using Base::ScalarVar_Grad_i;
+  using Base::ScalarVar_Grad_j;
+  using Base::Density_i;
+  using Base::Density_j;
+  using Base::Laminar_Viscosity_i;
+  using Base::Laminar_Viscosity_j;
+  using Base::Flux;
+  using Base::Jacobian_i;
+  using Base::Jacobian_j;
+
+  su2double F1_i=1.0, F1_j=1.0;
+  void ExtraADPreaccIn() override { AD::SetPreaccIn(F1_i,F1_j); }
+  void FinishResidualCalc(const CConfig* config) override {
+    const unsigned short ij[6][2] = {{0,0},{1,1},{2,2},{0,1},{0,2},{1,2}};
+    su2double K[3][3] = {};
+    const su2double k_i = 0.5*(ScalarVar_i[0]+ScalarVar_i[1]+ScalarVar_i[2]);
+    const su2double k_j = 0.5*(ScalarVar_j[0]+ScalarVar_j[1]+ScalarVar_j[2]);
+    const su2double omega_i = ScalarVar_i[6], omega_j = ScalarVar_j[6];
+    const su2double D_i = F1_i*0.0675+(1.0-F1_i)*0.22;
+    const su2double D_j = F1_j*0.0675+(1.0-F1_j)*0.22;
+    const su2double sigma_i = F1_i*0.5+(1.0-F1_i)*0.856;
+    const su2double sigma_j = F1_j*0.5+(1.0-F1_j)*0.856;
+    const su2double mu = 0.5*(Laminar_Viscosity_i+Laminar_Viscosity_j);
+    const su2double omegaDiff = mu + 0.5*(sigma_i*Density_i*k_i/omega_i
+                                           +sigma_j*Density_j*k_j/omega_j);
+    for (unsigned short c=0; c<6; ++c) {
+      const unsigned short p=ij[c][0], q=ij[c][1];
+      const su2double turbulent = 0.5*(D_i*Density_i*ScalarVar_i[c]/(0.09*omega_i)
+                                        +D_j*Density_j*ScalarVar_j[c]/(0.09*omega_j));
+      K[p][q]=K[q][p]=turbulent;
+    }
+    for (unsigned short p=0; p<3; ++p) K[p][p]+=mu;
+
+    su2double edge[3]={}, edge2=0.0;
+    for (unsigned short p=0; p<nDim; ++p) {
+      edge[p]=Coord_j[p]-Coord_i[p];
+      edge2+=edge[p]*edge[p];
+    }
+    for (unsigned short v=0; v<nVar; ++v) {
+      Flux[v]=0.0;
+      su2double grad[3]={}, projected=0.0;
+      for (unsigned short p=0; p<nDim; ++p) {
+        grad[p]=0.5*(ScalarVar_Grad_i[v][p]+ScalarVar_Grad_j[v][p]);
+        projected+=grad[p]*edge[p];
+      }
+      const su2double correction=(ScalarVar_j[v]-ScalarVar_i[v]-projected)/edge2;
+      for (unsigned short p=0; p<nDim; ++p) grad[p]+=correction*edge[p];
+      const su2double coeff = v==6 ? omegaDiff : su2double(0.0);
+      su2double nKe=0.0;
+      for (unsigned short p=0; p<nDim; ++p) {
+        for (unsigned short q=0; q<nDim; ++q) {
+          const su2double diffusivity=v==6 ? (p==q ? coeff : su2double(0.0)) : K[p][q];
+          Flux[v]+=Normal[p]*diffusivity*grad[q];
+          nKe+=Normal[p]*diffusivity*edge[q];
+        }
+      }
+      for (unsigned short w=0; w<nVar; ++w) {
+        Jacobian_i[v][w]=0.0;
+        Jacobian_j[v][w]=0.0;
+      }
+      if (config->GetKind_TimeIntScheme()==EULER_IMPLICIT) {
+        Jacobian_i[v][v]=-nKe/(edge2*Density_i);
+        Jacobian_j[v][v]= nKe/(edge2*Density_j);
+      }
+    }
+  }
+public:
+  CAvgGrad_TurbSSGLRR(unsigned short ndim,unsigned short nvar,bool correct,const CConfig* config)
+    : CAvgGrad_Scalar<FlowIndices>(ndim,nvar,correct,config) {
+    if (nvar!=7) SU2_MPI::Error("SSG/LRR needs seven equations",CURRENT_FUNCTION);
+  }
+  void SetF1blending(su2double i,su2double j) override { F1_i=i; F1_j=j; }
+};

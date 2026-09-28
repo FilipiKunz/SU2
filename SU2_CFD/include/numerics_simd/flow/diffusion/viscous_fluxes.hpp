@@ -80,6 +80,7 @@ protected:
   const bool useSA_QCR;
   const bool wallFun;
   const bool uq;
+  const bool transportedRSM;
   const bool uq_permute;
   const size_t uq_eigval_comp;
   const su2double uq_delta_b;
@@ -100,6 +101,7 @@ protected:
     useSA_QCR(config.GetSAParsedOptions().qcr2000),
     wallFun(config.GetWall_Functions()),
     uq(config.GetSSTParsedOptions().uq),
+    transportedRSM(config.GetKind_Turb_Model() == TURB_MODEL::SSGLRR_OMEGA2012),
     uq_permute(config.GetUQ_Permute()),
     uq_eigval_comp(config.GetEig_Val_Comp()),
     uq_delta_b(config.GetUQ_Delta_B()),
@@ -149,7 +151,23 @@ protected:
 
     /*--- Stress and heat flux tensors. ---*/
 
-    auto tau = stressTensor(avgV.laminarVisc() + (uq? Double(0.0) : avgV.eddyVisc()), avgGrad);
+    auto tau = stressTensor(avgV.laminarVisc() + ((uq || transportedRSM)? Double(0.0) : avgV.eddyVisc()), avgGrad);
+    MatrixDbl<nDim> meanR;
+    if (transportedRSM) {
+      // Same positive-covariance convention and face interpolation as the
+      // scalar viscous flux: tau_ij = tau_laminar,ij - rho_mean R_mean,ij.
+      // k/omega remains an eddy viscosity for heat conduction only.
+      const auto ri = gatherVariables<6>(iPoint, turbVars->GetSolution());
+      const auto rj = gatherVariables<6>(jPoint, turbVars->GetSolution());
+      const size_t component[3][3] = {{0,3,4},{3,1,5},{4,5,2}};
+      for (size_t iDim = 0; iDim < nDim; ++iDim) {
+        for (size_t jDim = 0; jDim < nDim; ++jDim) {
+          const auto c = component[iDim][jDim];
+          meanR(iDim,jDim) = 0.5 * (ri(c) + rj(c));
+          tau(iDim,jDim) -= avgV.density() * meanR(iDim,jDim);
+        }
+      }
+    }
     if(useSA_QCR) addQCR(avgGrad, tau);
     if(uq) {
       Double turb_ke = 0.5*(gatherVariables(iPoint, turbVars->GetSolution()) +
@@ -179,7 +197,9 @@ protected:
     /*--- Flux Jacobians. ---*/
 
     Double dist_ij = sqrt(dist2_ij);
-    auto dtau = stressTensorJacobian<nVar>(avgV, unitNormal, dist_ij);
+    auto momentumV = avgV;
+    if (transportedRSM) momentumV.eddyVisc() = 0.0;
+    auto dtau = stressTensorJacobian<nVar>(momentumV, unitNormal, dist_ij);
 
     /*--- Energy flux Jacobian. ---*/
     auto dEdU = derived->energyJacobian(avgV, dtau, cond, area, dist_ij, iPoint, jPoint, solution);
@@ -203,6 +223,19 @@ protected:
     for (size_t iDim = 0; iDim < nDim; ++iDim) {
       jac_i(nDim+1,iDim+1) -= halfOnRho * viscFlux(iDim+1);
       jac_j(nDim+1,iDim+1) -= halfOnRho * viscFlux(iDim+1);
+    }
+    if (transportedRSM) {
+      // Frozen-R derivative of minus the viscous flux. Both endpoint
+      // density derivatives have the same sign (as in CAvgGrad_Base).
+      Double energyDerivative = 0.0;
+      for (size_t iDim = 0; iDim < nDim; ++iDim) {
+        const Double derivative = 0.5 * area * dot(meanR[iDim], unitNormal);
+        jac_i(iDim+1,0) += derivative;
+        jac_j(iDim+1,0) += derivative;
+        energyDerivative += derivative * avgV.velocity(iDim);
+      }
+      jac_i(nDim+1,0) += energyDerivative;
+      jac_j(nDim+1,0) += energyDerivative;
     }
   }
 

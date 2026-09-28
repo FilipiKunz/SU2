@@ -949,11 +949,13 @@ enum class TURB_MODEL {
   NONE,      /*!< \brief No turbulence model. */
   SA,        /*!< \brief Kind of Turbulent model (Spalart-Allmaras). */
   SST,       /*!< \brief Kind of Turbulence model (Menter SST). */
+  SSGLRR_OMEGA2012, /*!< \brief SSG/LRR Reynolds-stress omega 2012. */
 };
 static const MapType<std::string, TURB_MODEL> Turb_Model_Map = {
   MakePair("NONE", TURB_MODEL::NONE)
   MakePair("SA", TURB_MODEL::SA)
   MakePair("SST", TURB_MODEL::SST)
+  MakePair("SSGLRR_OMEGA2012", TURB_MODEL::SSGLRR_OMEGA2012)
 };
 
 /*!
@@ -963,6 +965,7 @@ enum class TURB_FAMILY {
   NONE,   /*!< \brief No turbulence model. */
   SA,     /*!< \brief Spalart-Allmaras variants. */
   KW,     /*!< \brief k-w models. */
+  RSM,    /*!< \brief Reynolds-stress transport models. */
 };
 /*!
  * \brief Associate turb models with their family
@@ -975,6 +978,8 @@ inline TURB_FAMILY TurbModelFamily(TURB_MODEL model) {
       return TURB_FAMILY::SA;
     case TURB_MODEL::SST:
       return TURB_FAMILY::KW;
+    case TURB_MODEL::SSGLRR_OMEGA2012:
+      return TURB_FAMILY::RSM;
   }
   return TURB_FAMILY::NONE;
 }
