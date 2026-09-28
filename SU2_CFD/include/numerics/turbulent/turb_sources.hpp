@@ -978,7 +978,7 @@ public:
     residual[6]=s.rho*t.omegaSource*Volume;
     // SU2 advances rho*Rij and rho*omega. With rho frozen in the turbulence
     // block, d(rho*S)/d(rho*q) = dS/dq: no extra rho belongs in this Jacobian.
-    // Match OpenFOAM's frozen-coefficient implicit treatment of the linear
+    // Use a frozen-coefficient implicit approximation for the linear
     // redistribution sink: (C1*epsilon + C1star*G)/k, with G = Pkk/2.
     // This is a diagonal approximation, not the full source Jacobian.
     // The physical residual above is unchanged.
