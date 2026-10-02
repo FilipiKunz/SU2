@@ -24,6 +24,7 @@ endif
 
 su2_cpp_args = []
 su2_deps     = [declare_dependency(include_directories: 'externals/CLI11')]
+su2_install_rpath = ''
 
 default_warning_flags = []
 if build_machine.system() != 'windows'

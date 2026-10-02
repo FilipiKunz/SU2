@@ -27,6 +27,7 @@
 
 #include "../../../include/output/filewriter/CParaviewXMLFileWriter.hpp"
 #include "../../../../Common/include/toolboxes/printing_toolbox.hpp"
+#include <limits>
 
 const string CParaviewXMLFileWriter::fileExt = ".vtu";
 
@@ -64,8 +65,6 @@ void CParaviewXMLFileWriter::WriteData(string val_filename){
 
   unsigned long iPoint, iElem;
 
-  char str_buf[255];
-
   OpenMPIFile(val_filename);
 
   dataOffset = 0;
@@ -97,33 +96,36 @@ void CParaviewXMLFileWriter::WriteData(string val_filename){
   myElemStorage     = dataSorter->GetnConn();
   GlobalElem        = dataSorter->GetnElemGlobal();
   GlobalElemStorage = dataSorter->GetnConnGlobal();
+  const bool largeIds = GlobalPoint > std::numeric_limits<int>::max() ||
+                        GlobalElemStorage > std::numeric_limits<int>::max();
+  const VTKDatatype indexType = largeIds ? VTKDatatype::INT64 : VTKDatatype::INT32;
+
+  string xml;
 
   /* Write the ASCII XML header. Note that we use the appended format for the data,
   * which means that all data is appended at the end of the file in one binary blob.
   */
 
   if (!bigEndian){
-    WriteMPIString("<VTKFile type=\"UnstructuredGrid\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">\n", MASTER_NODE);
+    xml.append("<VTKFile type=\"UnstructuredGrid\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt64\">\n");
   } else {
-    WriteMPIString("<VTKFile type=\"UnstructuredGrid\" version=\"1.0\" byte_order=\"BigEndian\" header_type=\"UInt64\">\n", MASTER_NODE);
+    xml.append("<VTKFile type=\"UnstructuredGrid\" version=\"1.0\" byte_order=\"BigEndian\" header_type=\"UInt64\">\n");
   }
 
-  WriteMPIString("<UnstructuredGrid>\n", MASTER_NODE);
+  xml.append("<UnstructuredGrid>\n");
 
-  SPRINTF(str_buf, "<Piece NumberOfPoints=\"%i\" NumberOfCells=\"%i\">\n",
-          SU2_TYPE::Int(GlobalPoint), SU2_TYPE::Int(GlobalElem));
+  xml.append("<Piece NumberOfPoints=\"" + std::to_string(GlobalPoint) +
+             "\" NumberOfCells=\"" + std::to_string(GlobalElem) + "\">\n");
+  xml.append("<Points>\n");
+  AddDataArray(xml, VTKDatatype::FLOAT32, "", NCOORDS, myPoint*NCOORDS, GlobalPoint*NCOORDS);
+  xml.append("</Points>\n");
+  xml.append("<Cells>\n");
+  AddDataArray(xml, indexType, "connectivity", 1, myElemStorage, GlobalElemStorage);
+  AddDataArray(xml, indexType, "offsets", 1, myElem, GlobalElem);
+  AddDataArray(xml, VTKDatatype::UINT8, "types", 1, myElem, GlobalElem);
+  xml.append("</Cells>\n");
 
-  WriteMPIString(std::string(str_buf), MASTER_NODE);
-  WriteMPIString("<Points>\n", MASTER_NODE);
-  AddDataArray(VTKDatatype::FLOAT32, "", NCOORDS, myPoint*NCOORDS, GlobalPoint*NCOORDS);
-  WriteMPIString("</Points>\n", MASTER_NODE);
-  WriteMPIString("<Cells>\n", MASTER_NODE);
-  AddDataArray(VTKDatatype::INT32, "connectivity", 1, myElemStorage, GlobalElemStorage);
-  AddDataArray(VTKDatatype::INT32, "offsets", 1, myElem, GlobalElem);
-  AddDataArray(VTKDatatype::UINT8, "types", 1, myElem, GlobalElem);
-  WriteMPIString("</Cells>\n", MASTER_NODE);
-
-  WriteMPIString("<PointData>\n", MASTER_NODE);
+  xml.append("<PointData>\n");
 
   /*--- Adjust container start location to avoid point coords. ---*/
 
@@ -168,22 +170,23 @@ void CParaviewXMLFileWriter::WriteData(string val_filename){
 
       fieldname.erase(fieldname.end()-2,fieldname.end());
 
-      AddDataArray(VTKDatatype::FLOAT32, fieldname, NCOORDS, myPoint*NCOORDS, GlobalPoint*NCOORDS);
+      AddDataArray(xml, VTKDatatype::FLOAT32, fieldname, NCOORDS, myPoint*NCOORDS, GlobalPoint*NCOORDS);
 
     } else if (output_variable) {
 
-      AddDataArray(VTKDatatype::FLOAT32, fieldname, 1, myPoint, GlobalPoint);
+      AddDataArray(xml, VTKDatatype::FLOAT32, fieldname, 1, myPoint, GlobalPoint);
 
     }
 
   }
-  WriteMPIString("</PointData>\n", MASTER_NODE);
-  WriteMPIString("</Piece>\n", MASTER_NODE);
-  WriteMPIString("</UnstructuredGrid>\n", MASTER_NODE);
+  xml.append("</PointData>\n");
+  xml.append("</Piece>\n");
+  xml.append("</UnstructuredGrid>\n");
 
   /*--- Now write all the data we have previously defined into the binary section of the file ---*/
 
-  WriteMPIString("<AppendedData encoding=\"raw\">\n_", MASTER_NODE);
+  xml.append("<AppendedData encoding=\"raw\">\n_");
+  WriteMPIString(xml, MASTER_NODE);
 
   /*--- Load/write the 1D buffer of point coordinates. Note that we
    always have 3 coordinate dimensions, even for 2D problems. ---*/
@@ -205,32 +208,36 @@ void CParaviewXMLFileWriter::WriteData(string val_filename){
 
   /*--- Load/write 1D buffers for the connectivity of each element type. ---*/
 
-  vector<int> connBuf(myElemStorage);
-  vector<int> offsetBuf(myElem);
-  unsigned long iStorage = 0, iElemID = 0;
-  unsigned short iNode = 0;
-
-  auto copyToBuffer = [&](GEO_TYPE type, unsigned long nElem, unsigned short nPoints){
-    for (iElem = 0; iElem < nElem; iElem++) {
-      for (iNode = 0; iNode < nPoints; iNode++){
-        connBuf[iStorage+iNode] = int(dataSorter->GetElemConnectivity(type, iElem, iNode)-1);
+  auto writeConnectivity = [&](auto& connBuf, auto& offsetBuf) {
+    unsigned long iStorage = 0, iElemID = 0;
+    auto copyToBuffer = [&](GEO_TYPE type, unsigned long nElem, unsigned short nPoints) {
+      for (iElem = 0; iElem < nElem; iElem++) {
+        for (unsigned short iNode = 0; iNode < nPoints; iNode++)
+          connBuf[iStorage+iNode] = dataSorter->GetElemConnectivity(type, iElem, iNode)-1;
+        iStorage += nPoints;
+        offsetBuf[iElemID++] = iStorage + dataSorter->GetnElemConnCumulative(rank);
       }
-      iStorage += nPoints;
-      offsetBuf[iElemID++] = int(iStorage + dataSorter->GetnElemConnCumulative(rank));
-    }
+    };
+
+    copyToBuffer(LINE,          nParallel_Line, N_POINTS_LINE);
+    copyToBuffer(TRIANGLE,      nParallel_Tria, N_POINTS_TRIANGLE);
+    copyToBuffer(QUADRILATERAL, nParallel_Quad, N_POINTS_QUADRILATERAL);
+    copyToBuffer(TETRAHEDRON,   nParallel_Tetr, N_POINTS_TETRAHEDRON);
+    copyToBuffer(HEXAHEDRON,    nParallel_Hexa, N_POINTS_HEXAHEDRON);
+    copyToBuffer(PRISM,         nParallel_Pris, N_POINTS_PRISM);
+    copyToBuffer(PYRAMID,       nParallel_Pyra, N_POINTS_PYRAMID);
+
+    WriteDataArray(connBuf.data(), indexType, myElemStorage, GlobalElemStorage,
+                   dataSorter->GetnElemConnCumulative(rank));
+    WriteDataArray(offsetBuf.data(), indexType, myElem, GlobalElem, dataSorter->GetnElemCumulative(rank));
   };
-
-  copyToBuffer(LINE,          nParallel_Line, N_POINTS_LINE);
-  copyToBuffer(TRIANGLE,      nParallel_Tria, N_POINTS_TRIANGLE);
-  copyToBuffer(QUADRILATERAL, nParallel_Quad, N_POINTS_QUADRILATERAL);
-  copyToBuffer(TETRAHEDRON,   nParallel_Tetr, N_POINTS_TETRAHEDRON);
-  copyToBuffer(HEXAHEDRON,    nParallel_Hexa, N_POINTS_HEXAHEDRON);
-  copyToBuffer(PRISM,         nParallel_Pris, N_POINTS_PRISM);
-  copyToBuffer(PYRAMID,       nParallel_Pyra, N_POINTS_PYRAMID);
-
-  WriteDataArray(connBuf.data(), VTKDatatype::INT32, myElemStorage, GlobalElemStorage,
-                 dataSorter->GetnElemConnCumulative(rank));
-  WriteDataArray(offsetBuf.data(), VTKDatatype::INT32, myElem, GlobalElem, dataSorter->GetnElemCumulative(rank));
+  if (largeIds) {
+    vector<int64_t> connBuf(myElemStorage), offsetBuf(myElem);
+    writeConnectivity(connBuf, offsetBuf);
+  } else {
+    vector<int> connBuf(myElemStorage), offsetBuf(myElem);
+    writeConnectivity(connBuf, offsetBuf);
+  }
 
   /*--- Load/write the cell type for all elements in the file. ---*/
 
@@ -315,8 +322,7 @@ void CParaviewXMLFileWriter::WriteData(string val_filename){
 
   }
 
-  WriteMPIString("</AppendedData>\n", MASTER_NODE);
-  WriteMPIString("</VTKFile>\n", MASTER_NODE);
+  WriteMPIString("</AppendedData>\n</VTKFile>\n", MASTER_NODE);
 
   CloseMPIFile();
 
@@ -350,7 +356,7 @@ void CParaviewXMLFileWriter::WriteDataArray(void* data, VTKDatatype type, unsign
   }
 }
 
-void CParaviewXMLFileWriter::AddDataArray(VTKDatatype type, string name,
+void CParaviewXMLFileWriter::AddDataArray(string& header, VTKDatatype type, string name,
                                           unsigned short nComponents, unsigned long arraySize, unsigned long globalSize){
 
   /*--- Add quotation marks around the arguments ---*/
@@ -377,11 +383,11 @@ void CParaviewXMLFileWriter::AddDataArray(VTKDatatype type, string name,
 
   /*--- Write the ASCII XML header information for this array ---*/
 
-  WriteMPIString(string("<DataArray type=") + typeStr +
+  header += string("<DataArray type=") + typeStr +
                  string(" Name=") + name +
                  string(" NumberOfComponents= ") + nComp +
                  string(" offset=") + offsetStr +
-                 string(" format=\"appended\"/>\n"), MASTER_NODE);
+                 string(" format=\"appended\"/>\n");
 
   dataOffset += totalByteSize + sizeof(size_t);
 

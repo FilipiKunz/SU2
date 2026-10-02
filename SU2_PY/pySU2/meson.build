@@ -42,6 +42,7 @@ if get_option('enable-normal')
         su2_def_lib.extract_objects('drivers/CDeformationDriver.cpp')
       ],
       install: true,
+      install_rpath: su2_install_rpath,
       include_directories : mpi4py_include,
       cpp_args : [default_warning_flags,su2_cpp_args],
       name_prefix : '',
@@ -61,6 +62,7 @@ if get_option('enable-autodiff')
         su2_def_lib_ad.extract_objects('drivers/CDiscAdjDeformationDriver.cpp')
       ],
       install: true,
+      install_rpath: su2_install_rpath,
       include_directories : mpi4py_include,
       cpp_args : [default_warning_flags, su2_cpp_args, codi_rev_args],
       name_prefix : '',

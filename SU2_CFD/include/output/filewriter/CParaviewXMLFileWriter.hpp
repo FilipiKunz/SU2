@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include "CFileWriter.hpp"
 
 class CParaviewXMLFileWriter final: public CFileWriter{
@@ -39,6 +40,7 @@ private:
   enum class VTKDatatype {
     FLOAT32,
     INT32,
+    INT64,
     UINT8
   };
 
@@ -92,7 +94,8 @@ private:
    * \param[in] size        - The total size of the array
    * \param[in] globalSize  - The global size of the array over all processors
    */
-  void AddDataArray(VTKDatatype type, string name, unsigned short nComponents, unsigned long size, unsigned long globalSize);
+  void AddDataArray(string& header, VTKDatatype type, string name, unsigned short nComponents,
+                    unsigned long size, unsigned long globalSize);
 
   /*!
    * \brief Write an array that has previously been defined with ::AddDataArray to the vtu file in binary format
@@ -120,6 +123,10 @@ private:
         typeStr = "\"Int32\"";
         typeSize = sizeof(int);
         break;
+      case VTKDatatype::INT64:
+        typeStr = "\"Int64\"";
+        typeSize = sizeof(int64_t);
+        break;
       case VTKDatatype::UINT8:
         typeStr = "\"UInt8\"";
         typeSize = sizeof(char);
@@ -130,4 +137,3 @@ private:
     }
   }
 };
-

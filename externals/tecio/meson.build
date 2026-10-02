@@ -14,6 +14,18 @@ endif
 if mpi
   subdir('teciompisrc')
   su2_deps += teciompi_dep
+  if host_machine.system() == 'linux'
+    # TecIO's MPI build corrupts large unpartitioned FE zones. Keep its
+    # partitioned 3D writer and isolate the serial writer in a shared library.
+    subdir('teciosrc')
+    tecio_serial = shared_library('su2tecioserial', 'serial_writer.cpp',
+      link_with: tecio,
+      link_args: ['-Wl,-Bsymbolic', '-Wl,--exclude-libs,ALL'],
+      install: true)
+    su2_deps += declare_dependency(link_with: tecio_serial)
+    su2_cpp_args += '-DHAVE_SERIAL_TECIO'
+    su2_install_rpath = '$ORIGIN/..' / get_option('libdir')
+  endif
   su2_cpp_args += ['-DHAVE_TECIO', '-DTECIOMPI']
 else
   subdir('teciosrc')

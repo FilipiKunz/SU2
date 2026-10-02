@@ -26,6 +26,8 @@
  */
 
 #include <utility>
+#include <algorithm>
+#include <climits>
 
 #include "../../../include/output/filewriter/CFileWriter.hpp"
 
@@ -61,25 +63,20 @@ bool CFileWriter::WriteMPIBinaryDataAll(const void *data, unsigned long sizeInBy
 
   startTime = SU2_MPI::Wtime();
 
-  MPI_Datatype filetype;
-
-  /*--- Prepare to write the actual data ---*/
-
-  MPI_Type_contiguous(int(sizeInBytes), MPI_BYTE, &filetype);
-  MPI_Type_commit(&filetype);
-
-  /*--- Set the view for the MPI file write, i.e., describe the
- location in the file that this rank "sees" for writing its
- piece of the file. ---*/
-
-  MPI_File_set_view(fhw, disp + offsetInBytes, MPI_BYTE, filetype,
-                    (char*)"native", MPI_INFO_NULL);
-
-  /*--- Collective call for all ranks to write simultaneously. ---*/
-
-  int ierr = MPI_File_write_all(fhw, data, int(sizeInBytes), MPI_BYTE, MPI_STATUS_IGNORE);
-
-  MPI_Type_free(&filetype);
+  /*--- Each rank writes its own disjoint range at an explicit byte offset.
+   * This avoids a collective operation for every output field. ---*/
+  int ierr = MPI_SUCCESS;
+  const auto* bytes = static_cast<const char*>(data);
+  for (unsigned long pos = 0; pos < sizeInBytes; pos += INT_MAX) {
+    const int count = static_cast<int>(std::min<unsigned long>(INT_MAX, sizeInBytes - pos));
+    MPI_Status status;
+    const int result = MPI_File_write_at(fhw, disp + offsetInBytes + pos,
+                                         bytes + pos, count, MPI_BYTE, &status);
+    int written = 0;
+    if (result != MPI_SUCCESS || MPI_Get_count(&status, MPI_BYTE, &written) != MPI_SUCCESS || written != count)
+      ierr = MPI_ERR_IO;
+  }
+  if (ierr != MPI_SUCCESS) SU2_MPI::Error("Writing binary output failed.", CURRENT_FUNCTION);
 
   disp      += totalSizeInBytes;
   fileSize  += sizeInBytes;
@@ -99,6 +96,7 @@ bool CFileWriter::WriteMPIBinaryDataAll(const void *data, unsigned long sizeInBy
 
   bytesWritten = fwrite(data, sizeof(char), sizeInBytes, fhw);
   fileSize += bytesWritten;
+  if (bytesWritten != sizeInBytes) SU2_MPI::Error("Writing binary output failed.", CURRENT_FUNCTION);
 
   stopTime = SU2_MPI::Wtime();
 
@@ -117,16 +115,17 @@ bool CFileWriter::WriteMPIBinaryData(const void *data, unsigned long sizeInBytes
 
   int ierr = MPI_SUCCESS;
 
-  /*--- Reset the file view. ---*/
-
-  MPI_File_set_view(fhw, 0, MPI_BYTE, MPI_BYTE,
-                    (char*)"native", MPI_INFO_NULL);
-
-  if (rank == processor)
-    ierr = MPI_File_write_at(fhw, disp, data, int(sizeInBytes), MPI_BYTE, MPI_STATUS_IGNORE);
+  if (rank == processor) {
+    if (sizeInBytes > INT_MAX) SU2_MPI::Error("Binary output header exceeds MPI count limit.", CURRENT_FUNCTION);
+    MPI_Status status;
+    ierr = MPI_File_write_at(fhw, disp, data, int(sizeInBytes), MPI_BYTE, &status);
+    int written = 0;
+    if (ierr != MPI_SUCCESS || MPI_Get_count(&status, MPI_BYTE, &written) != MPI_SUCCESS || written != sizeInBytes)
+      SU2_MPI::Error("Writing binary output header failed.", CURRENT_FUNCTION);
+  }
 
   disp     += sizeInBytes;
-  fileSize += sizeInBytes;
+  if (rank == processor) fileSize += sizeInBytes;
 
   stopTime = SU2_MPI::Wtime();
 
@@ -142,6 +141,8 @@ bool CFileWriter::WriteMPIBinaryData(const void *data, unsigned long sizeInBytes
   /*--- Write the total size in bytes at the beginning of the binary data blob ---*/
 
   bytesWritten = fwrite(data, sizeof(char), sizeInBytes, fhw);
+  fileSize += bytesWritten;
+  if (bytesWritten != sizeInBytes) SU2_MPI::Error("Writing binary output header failed.", CURRENT_FUNCTION);
 
   stopTime = SU2_MPI::Wtime();
 
@@ -161,17 +162,17 @@ bool CFileWriter::WriteMPIString(const string &str, unsigned short processor){
 
   int ierr = MPI_SUCCESS;
 
-  /*--- Reset the file view. ---*/
-
-  MPI_File_set_view(fhw, 0, MPI_BYTE, MPI_BYTE,
-                    (char*)"native", MPI_INFO_NULL);
-
-  if (SU2_MPI::GetRank() == processor)
-    ierr = MPI_File_write_at(fhw, disp, str.c_str(), str.size(),
-                      MPI_CHAR, MPI_STATUS_IGNORE);
+  if (rank == processor) {
+    if (str.size() > INT_MAX) SU2_MPI::Error("Output header exceeds MPI count limit.", CURRENT_FUNCTION);
+    MPI_Status status;
+    ierr = MPI_File_write_at(fhw, disp, str.c_str(), int(str.size()), MPI_CHAR, &status);
+    int written = 0;
+    if (ierr != MPI_SUCCESS || MPI_Get_count(&status, MPI_CHAR, &written) != MPI_SUCCESS || written != str.size())
+      SU2_MPI::Error("Writing output header failed.", CURRENT_FUNCTION);
+  }
 
   disp += str.size()*sizeof(char);
-  fileSize += sizeof(char)*str.size();
+  if (rank == processor) fileSize += sizeof(char)*str.size();
 
   stopTime = SU2_MPI::Wtime();
 
@@ -187,6 +188,7 @@ bool CFileWriter::WriteMPIString(const string &str, unsigned short processor){
   bytesWritten = fwrite(str.c_str(), sizeof(char), str.size(), fhw);
 
   fileSize += bytesWritten;
+  if (bytesWritten != str.size()) SU2_MPI::Error("Writing output header failed.", CURRENT_FUNCTION);
 
   stopTime = SU2_MPI::Wtime();
 
@@ -207,28 +209,20 @@ bool CFileWriter::OpenMPIFile(string val_filename){
   int ierr;
   disp     = 0.0;
 
-  /*--- All ranks open the file using MPI. Here, we try to open the file with
-   exclusive so that an error is generated if the file exists. We always want
-   to write a fresh output file, so we delete any existing files and create
-   a new one. ---*/
-
+  /*--- Truncate an existing output instead of closing an invalid handle and
+   * deleting the file before reopening it. ---*/
   ierr = MPI_File_open(SU2_MPI::GetComm(), val_filename.c_str(),
-                       MPI_MODE_CREATE|MPI_MODE_EXCL|MPI_MODE_WRONLY,
+                       MPI_MODE_CREATE|MPI_MODE_WRONLY,
                        MPI_INFO_NULL, &fhw);
-  if (ierr != MPI_SUCCESS)  {
-    MPI_File_close(&fhw);
-    if (rank == 0)
-      MPI_File_delete(val_filename.c_str(), MPI_INFO_NULL);
-    ierr = MPI_File_open(SU2_MPI::GetComm(), val_filename.c_str(),
-                         MPI_MODE_CREATE|MPI_MODE_EXCL|MPI_MODE_WRONLY,
-                         MPI_INFO_NULL, &fhw);
-  }
 
   /*--- Error check opening the file. ---*/
 
   if (ierr) {
     SU2_MPI::Error(string("Unable to open file ") +
                    val_filename, CURRENT_FUNCTION);
+  }
+  if (MPI_File_set_size(fhw, 0) != MPI_SUCCESS) {
+    SU2_MPI::Error(string("Unable to truncate file ") + val_filename, CURRENT_FUNCTION);
   }
 #else
   fhw = fopen(val_filename.c_str(), "wb");
@@ -251,9 +245,11 @@ bool CFileWriter::CloseMPIFile(){
 #ifdef HAVE_MPI
   /*--- All ranks close the file after writing. ---*/
 
-  MPI_File_close(&fhw);
+  if (MPI_File_close(&fhw) != MPI_SUCCESS)
+    SU2_MPI::Error("Closing output file failed.", CURRENT_FUNCTION);
 #else
-  fclose(fhw);
+  if (fclose(fhw) != 0)
+    SU2_MPI::Error("Closing output file failed.", CURRENT_FUNCTION);
 #endif
 
   /*--- Communicate the total file size for the restart ---*/
@@ -264,8 +260,7 @@ bool CFileWriter::CloseMPIFile(){
 
   /*--- Compute and store the bandwidth ---*/
 
-  bandwidth = fileSize/(1.0e6)/usedTime;
+  bandwidth = usedTime > 0 ? fileSize/(1.0e6)/usedTime : 0;
 
   return true;
 }
-
