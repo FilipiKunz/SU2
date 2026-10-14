@@ -57,7 +57,7 @@ CTurbSSGLRROmega2012Solver::CTurbSSGLRROmega2012Solver(CGeometry *geometry, CCon
 
   /*--- Single grid simulation ---*/
 
-  if (iMesh == MESH_0 || config->GetMGCycle() == FULLMG_CYCLE) {
+  if (iMesh == MESH_0 || config->GetMGCycle() == MG_CYCLE::FULL) {
 
     /*--- Define some auxiliary vector related with the residual ---*/
 
@@ -180,7 +180,6 @@ void CTurbSSGLRROmega2012Solver::Preprocessing(CGeometry *geometry, CSolver **so
 
 void CTurbSSGLRROmega2012Solver::Postprocessing(CGeometry *geometry, CSolver **solver_container,
                                                 CConfig *config, unsigned short iMesh) {
-  flowState=solver_container[FLOW_SOL]->GetNodes();
   if (config->GetKind_Gradient_Method() == GREEN_GAUSS)
     SetSolution_Gradient_GG(geometry, config, -1);
   if (config->GetKind_Gradient_Method() == WEIGHTED_LEAST_SQUARES)
@@ -335,7 +334,7 @@ void CTurbSSGLRROmega2012Solver::BC_HeatFlux_Wall(
     nodes->SetSolution(iPoint,wall);
     LinSysRes.SetBlock_Zero(iPoint);
     if (implicit)
-      for (unsigned short v=0; v<7; ++v) Jacobian.DeleteValsRowi(iPoint*nVar+v);
+      for (unsigned short v=0; v<7; ++v) Jacobian.DeleteValsRowi(iPoint, v);
   }
   END_SU2_OMP_FOR
 }
@@ -816,9 +815,9 @@ void CTurbSSGLRROmega2012Solver::SetUniformInlet(const CConfig* config, unsigned
 
 }
 
-void CTurbSSGLRROmega2012Solver::ComputeUnderRelaxationFactor(const CConfig *config) {
+void CTurbSSGLRROmega2012Solver::ComputeUnderRelaxationFactor(CSolver** solver_container, const CConfig *config) {
   const su2double allowableRatio = config->GetMaxUpdateFractionSST();
-  if (!flowState) SU2_MPI::Error("Missing flow state in SSG/LRR update",CURRENT_FUNCTION);
+  const auto* flowState = solver_container[FLOW_SOL]->GetNodes();
   unsigned long limited=0, cancelled=0;
   su2double minFactor=1.0;
   SU2_OMP_FOR_STAT(omp_chunk_size)

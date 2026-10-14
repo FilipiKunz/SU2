@@ -2,7 +2,7 @@
  * \file CEulerVariable.cpp
  * \brief Definition of the solution fields.
  * \author F. Palacios, T. Economon
- * \version 8.4.0 "Harrier"
+ * \version 8.5.0 "Harrier"
  *
  * SU2 Project Website: https://su2code.github.io
  *
@@ -39,8 +39,9 @@ unsigned long EulerNPrimVarGrad(const CConfig *config, unsigned long ndim) {
     const bool ideal_gas = config->GetKind_FluidModel() == STANDARD_AIR ||
                            config->GetKind_FluidModel() == IDEAL_GAS;
 
-    if (ideal_gas && config->GetKind_Upwind_Flow() == UPWIND::ROE &&
-        !config->Low_Mach_Correction()) {
+    if (ideal_gas && !config->Low_Mach_Correction() &&
+        (config->GetKind_Upwind_Flow() == UPWIND::ROE ||
+         config->GetKind_Upwind_Flow() == UPWIND::MSW)) {
       nPrimVarGrad = ndim + 2;
     } else {
       nPrimVarGrad = ndim + 4;
@@ -48,6 +49,13 @@ unsigned long EulerNPrimVarGrad(const CConfig *config, unsigned long ndim) {
   }
 
   return std::max<unsigned long>(nPrimVarGrad, ndim + 7);
+}
+
+unsigned long EulerNSecVar(const CConfig *config) {
+  const bool ideal_gas = config->GetKind_FluidModel() == STANDARD_AIR ||
+                         config->GetKind_FluidModel() == IDEAL_GAS;
+  if (ideal_gas) return 0;
+  return config->GetViscous() ? 8 : 2;
 }
 
 CEulerVariable::CEulerVariable(su2double density, const su2double *velocity, su2double energy, unsigned long npoint,
@@ -59,8 +67,7 @@ CEulerVariable::CEulerVariable(su2double density, const su2double *velocity, su2
                          (config->GetTime_Marching() == TIME_MARCHING::DT_STEPPING_2ND);
   const bool classical_rk4 = (config->GetKind_TimeIntScheme_Flow() == CLASSICAL_RK4_EXPLICIT);
 
-  nSecondaryVar = config->GetViscous() ? 8 : 2,
-  nSecondaryVarGrad = 2;
+  nSecondaryVar = EulerNSecVar(config);
 
   /*--- Solution initialization ---*/
 
@@ -163,10 +170,11 @@ bool CEulerVariable::SetPrimVar(unsigned long iPoint, CFluidModel *FluidModel) {
 }
 
 void CEulerVariable::SetSecondaryVar(unsigned long iPoint, CFluidModel *FluidModel) {
+  if (nSecondaryVar == 0) return;
 
-   /*--- Compute secondary thermo-physical properties (partial derivatives...) ---*/
+  /*--- Compute secondary thermo-physical properties (partial derivatives...) ---*/
 
-   SetdPdrho_e(iPoint, FluidModel->GetdPdrho_e());
-   SetdPde_rho(iPoint, FluidModel->GetdPde_rho());
+  SetdPdrho_e(iPoint, FluidModel->GetdPdrho_e());
+  SetdPde_rho(iPoint, FluidModel->GetdPde_rho());
 
 }

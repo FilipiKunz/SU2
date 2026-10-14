@@ -3,7 +3,7 @@
  * \brief Class for defining the variables of the incompressible
           Navier-Stokes solver.
  * \author F. Palacios, T. Economon
- * \version 8.4.0 "Harrier"
+ * \version 8.5.0 "Harrier"
  *
  * SU2 Project Website: https://su2code.github.io
  *
@@ -39,7 +39,8 @@
 class CIncNSVariable final : public CIncEulerVariable {
 private:
   VectorType Tau_Wall;        /*!< \brief Magnitude of the wall shear stress from a wall function. */
-  VectorType DES_LengthScale;
+  VectorType DES_LengthScale; /*!< \brief DES Length Scale. */
+  VectorType lesMode;        /*!< \brief Sensor for local simulation mode (0=RANS, 1=LES).*/
   const bool Energy;          /*!< \brief Flag for Energy equation in incompressible flows. */
 
 public:
@@ -137,4 +138,17 @@ public:
                                             unsigned long iDim) const override {
     return Gradient_Primitive(iPoint, indices.EddyViscosity(), iDim);
   }
+  /*!
+   * \brief Set the LES sensor.
+   */
+  inline void SetLES_Mode(unsigned long iPoint, su2double val_les_mode) override {
+    lesMode(iPoint) = val_les_mode;
+  }
+
+  /*!
+   * \brief Get the LES sensor.
+   * \return Value of the LES sensor.
+   */
+  inline su2double GetLES_Mode(unsigned long iPoint) const override { return lesMode(iPoint); }
+
 };

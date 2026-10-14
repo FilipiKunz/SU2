@@ -37,13 +37,12 @@
  */
 class CTurbSSGLRROmega2012Solver final : public CTurbSolver {
 private:
-  const CVariable* flowState = nullptr;
   /*!
    * \brief Compute a suitable under-relaxation parameter to limit the change in the solution variables over
    * a nonlinear iteration for stability.
    * \param[in] config - Definition of the particular problem.
    */
-  void ComputeUnderRelaxationFactor(const CConfig *config) override;
+  void ComputeUnderRelaxationFactor(CSolver** solver_container, const CConfig *config) override;
 
 public:
   /*!

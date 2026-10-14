@@ -2,7 +2,7 @@
  * \file adj_convection.cpp
  * \brief Implementation of adjoint convection numerics classes.
  * \author F. Palacios, T. Economon
- * \version 8.4.0 "Harrier"
+ * \version 8.5.0 "Harrier"
  *
  * SU2 Project Website: https://su2code.github.io
  *
@@ -705,8 +705,8 @@ void CUpwRoe_AdjFlow::ComputeResidual (su2double *val_residual_i, su2double *val
 
     /*--- Compute P, inverse P, and store eigenvalues ---*/
 
-    GetPMatrix_inv(&RoeDensity, RoeVelocity, &RoeSoundSpeed, UnitNormal, invP_Tensor);
-    GetPMatrix(&RoeDensity, RoeVelocity, &RoeSoundSpeed, UnitNormal, P_Tensor);
+    GetPMatrix_inv(RoeDensity, RoeVelocity, RoeSoundSpeed, UnitNormal, invP_Tensor);
+    GetPMatrix(RoeDensity, RoeVelocity, RoeSoundSpeed, UnitNormal, P_Tensor);
 
     /*--- Flow eigenvalues ---*/
 
